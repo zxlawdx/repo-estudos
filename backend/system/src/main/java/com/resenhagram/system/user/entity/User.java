@@ -168,4 +168,5 @@ public class User {
     public String getProviderId() {
         return providerId;
     }
+    
 }
