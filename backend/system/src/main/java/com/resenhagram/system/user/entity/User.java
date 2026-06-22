@@ -12,7 +12,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "users")
 public class User {
-
+    
     @Id
     @Column(name = "user_id", length = 80, nullable = false)
     private String userId;
@@ -23,8 +23,21 @@ public class User {
     @Column(name = "display_name", length = 100, nullable = false)
     private String displayName;
 
-    @Column(name = "password_hash", length = 255, nullable = false)
+    @Column(name = "password_hash", length = 255)
     private String passwordHash;
+
+    @Column(name = "email", length = 150, unique = true)
+    private String email;
+
+    @Column(name = "avatar_url")
+    private String avatarUrl;
+
+    @Column(name = "provider", length = 30, nullable = false)
+    private String provider;
+
+    @Column(name = "provider_id", length = 150)
+    private String providerId;
+
 
     @Column(name = "role", length = 30, nullable = false)
     private String role;
@@ -50,6 +63,30 @@ public class User {
         this.passwordHash = passwordHash;
         this.role = "USER";
         this.status = "ACTIVE";
+        this.provider = "LOCAL";
+    }
+
+
+    public static User createGoogleUser(
+                String username,
+                String displayName,
+                String email,
+                String avatarUrl,
+                String providerId
+    ) {
+        User user = new User();
+
+        user.username = username;
+        user.displayName = displayName;
+        user.email = email;
+        user.avatarUrl = avatarUrl;
+        user.passwordHash = null;
+        user.provider = "GOOGLE";
+        user.providerId = providerId;
+        user.role = "USER";
+        user.status = "ACTIVE";
+
+        return user;
     }
 
     @PrePersist
@@ -109,5 +146,26 @@ public class User {
 
     public void updateLastLogin() {
         this.lastLoginAt = LocalDateTime.now();
+    }
+
+    public void updateGoogleProfile(String displayName, String avatarUrl) {
+        this.displayName = displayName;
+        this.avatarUrl = avatarUrl;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public String getProvider() {
+        return provider;
+    }
+
+    public String getProviderId() {
+        return providerId;
     }
 }

@@ -33,21 +33,36 @@ public class UserController {
 
     @PostMapping
     public ResponseEntity<UserResponse> create(@RequestBody @Valid CreateUserRequest request) {
-        UserResponse response = userService.create(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+       try {
+            UserResponse response = userService.create(request);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+       } catch (RuntimeException e) {
+            return ResponseEntity.internalServerError()
+                .build();
+       }
     }
 
     @GetMapping("/{userId}")
     public ResponseEntity<UserResponse> findById(@PathVariable String userId) {
-        UserResponse response = userService.findById(userId);
-        return ResponseEntity.ok(response);
+        try { 
+            UserResponse response = userService.findById(userId);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound()
+                .build();
+        }
     }
 
     @GetMapping("/username/{username}")
     public ResponseEntity<UserResponse> findByUserName(@PathVariable String username) {
-        UserResponse response = userService.findByUsernameIgnoreCase(username);
-
-        return ResponseEntity.ok(response);
+        try{
+            UserResponse response = userService.findByUsernameIgnoreCase(username);
+            return ResponseEntity.ok(response);
+        }catch (RuntimeException e) {
+           return ResponseEntity.notFound()
+            .build();
+        }
+       
     }
     
 
@@ -56,14 +71,24 @@ public class UserController {
             @PathVariable String userId,
             @RequestBody @Valid UpdateUserRequest request
     ) {
-        UserResponse response = userService.update(userId, request);
-        return ResponseEntity.ok(response);
+        try {
+            UserResponse response = userService.update(userId, request);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.internalServerError()
+                .build();
+        }
     }
 
     @DeleteMapping("/{userId}")
     public ResponseEntity<Void> delete(@PathVariable String userId) {
-        userService.delete(userId);
-        return ResponseEntity.noContent().build();
+        try {
+            userService.delete(userId);
+            return ResponseEntity.noContent().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.internalServerError()
+                .build();
+        }
     }
     
 }

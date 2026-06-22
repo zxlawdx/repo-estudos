@@ -2,6 +2,7 @@ package com.resenhagram.system.user.service;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.resenhagram.system.user.dto.request.CreateUserRequest;
 import com.resenhagram.system.user.dto.request.UpdateUserRequest;
@@ -75,5 +76,52 @@ public class UserService {
                 user.getCreatedBy(),
                 user.getLastLoginAt()
         );
+    }
+
+
+    @Transactional
+    public User findOrCreateGoogleUser(
+            String googleId,
+            String email,
+            String displayName,
+            String avatarUrl
+    ) {
+        return userRepository.findByProviderAndProviderId("GOOGLE", googleId)
+                .map(existingUser -> {
+                    existingUser.updateGoogleProfile(displayName, avatarUrl);
+                    existingUser.updateLastLogin();
+                    return userRepository.save(existingUser);
+                })
+                .orElseGet(() -> {
+                    String username = generateUsernameFromEmail(email);
+
+                    User newUser = User.createGoogleUser(
+                            username,
+                            displayName,
+                            email,
+                            avatarUrl,
+                            googleId
+                    );
+
+                    newUser.updateLastLogin();
+
+                    return userRepository.save(newUser);
+                });
+    }
+
+    private String generateUsernameFromEmail(String email) {
+        String baseUsername = email.substring(0, email.indexOf("@"))
+                .toLowerCase()
+                .replaceAll("[^a-z0-9._]", "");
+
+        String username = baseUsername;
+        int counter = 1;
+
+        while (userRepository.existsByUsernameIgnoreCase(username)) {
+            username = baseUsername + counter;
+            counter++;
+        }
+
+        return username;
     }
 }
