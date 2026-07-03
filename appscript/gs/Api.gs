@@ -160,6 +160,25 @@ var API_ACTIONS = {
   saveReadingProgress: function (p) { return saveReadingProgress(p, _tk_(p)); },
   saveVideoProgress: function (p) { return saveVideoProgress(p, _tk_(p)); },
 
+  // ---------------- Histórico ----------------
+  getHistoryFull: function (p) { return getHistoryFull(p); },
+  getRecentActivity: function (p) { return getRecentActivity(p.limit || 10, _tk_(p)); },
+  getActivitySummary: function (p) { return getActivitySummary(p.days || 30, _tk_(p)); },
+
+  // ---------------- Resenhas ----------------
+  listReviews: function (p) { return listReviews(p); },
+  getReviewDetail: function (p) { return getReviewDetail(p); },
+  createReviewPost: function (p) { return createReviewPost(p); },
+  updateReviewPost: function (p) { return updateReviewPost(p); },
+  deleteReviewPost: function (p) { return deleteReviewPost(p); },
+  createReviewComment: function (p) { return createReviewComment(p); },
+  updateReviewComment: function (p) { return updateReviewComment(p); },
+  deleteReviewComment: function (p) { return deleteReviewComment(p); },
+  toggleReviewReaction: function (p) { return toggleReviewReaction(p); },
+  toggleReviewSave: function (p) { return toggleReviewSave(p); },
+  listReviewMaterials: function (p) { return listReviewMaterials(p); },
+  listReviewFilters: function (p) { return listReviewFilters(p); },
+
   // ---------------- Admin ----------------
   getAdminUsers: function (p) { return getAdminUsers(p); },
   updateManagedUser: function (p) { return updateManagedUser(p); },

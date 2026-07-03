@@ -2,6 +2,11 @@ spring:
   application:
     name: system
 
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 60MB
+
   security:
     oauth2:
       client:
@@ -31,6 +36,8 @@ app:
 
 server:
   port: 8081
+  tomcat:
+    max-swallow-size: 60MB
 
 APPS_SCRIPT_API_URL: ${APPS_SCRIPT_API_URL:}
 APPS_SCRIPT_API_SECRET: ${APPS_SCRIPT_API_SECRET:}

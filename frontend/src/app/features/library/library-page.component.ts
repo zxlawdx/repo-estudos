@@ -49,7 +49,7 @@ import { firstArray, fileTitle, fileTypeLabel, pickString, statusLabel } from '.
             <div><label>Autor</label><span>{{ material.author || '—' }}</span></div>
             <div><label>Ano</label><span>{{ material.year || '—' }}</span></div>
             <div><label>Categoria</label><span>{{ category(material) || '—' }}</span></div>
-            <div><label>Assunto</label><span>{{ material.subject_name || '—' }}</span></div>
+            <div><label>Assunto</label><span>{{ subject(material) || '—' }}</span></div>
           </div>
           <div class="flex items-center gap-2 flex-wrap mt-md">
             <a [routerLink]="['/app/library', idOf(material)]" class="btn-primary no-underline">Abrir</a>
@@ -82,7 +82,7 @@ export class LibraryPageComponent implements OnInit {
   load(): void {
     this.loading.set(true); this.error.set(null);
     const params: Record<string, unknown> = { q: this.search, search: this.search, status: this.statusFilter, visibility: this.visibility };
-    if (this.typeFilter && this.typeFilter !== 'all' && this.typeFilter !== 'pending') params['type'] = this.typeFilter;
+    if (this.typeFilter && this.typeFilter !== 'all' && this.typeFilter !== 'pending') params['fileType'] = this.typeFilter;
     if (this.typeFilter === 'pending') params['status'] = 'pending';
     this.files.list(params).subscribe({
       next: (res) => { this.materials.set(firstArray<StudyMaterial>(res, ['files', 'materials', 'items', 'content'])); this.loading.set(false); },
@@ -94,6 +94,7 @@ export class LibraryPageComponent implements OnInit {
   title(material: StudyMaterial): string { return fileTitle(material); }
   typeLabel(material: StudyMaterial): string { return fileTypeLabel(material.file_type || material.type); }
   status(value: unknown): string { return statusLabel(value); }
-  category(material: StudyMaterial): string { return pickString(material, ['category_name']); }
-  previewUrl(material: StudyMaterial): string { return pickString(material, ['google_drive_preview_url', 'preview_url', 'google_drive_url', 'url']); }
+  category(material: StudyMaterial): string { return pickString(material, ['category_name', 'categories.name', 'category']); }
+  subject(material: StudyMaterial): string { return pickString(material, ['subject_name', 'subjects.name', 'subject']); }
+  previewUrl(material: StudyMaterial): string { return pickString(material, ['google_drive_web_url', 'google_drive_preview_url', 'preview_url', 'external_url', 'google_drive_url', 'url']); }
 }

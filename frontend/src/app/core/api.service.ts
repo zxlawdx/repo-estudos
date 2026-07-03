@@ -94,8 +94,16 @@ export class ApiService {
   }
 
   private cleanMessage(message: string): string {
-    if (/invalid cors request/i.test(message)) return 'Não foi possível acessar a API pelo navegador. Verifique o proxy /api do Nginx e o CORS no backend.';
-    if (/unknown error|http failure response/i.test(message)) return 'Não foi possível conectar ao servidor. Confira se backend e proxy /api estão ativos.';
-    return message || 'Não foi possível concluir a operação.';
+    const text = String(message || '');
+    if (/413 Request Entity Too Large|request entity too large/i.test(text)) {
+      return 'O arquivo ultrapassou o limite aceito pelo Nginx. Ajuste client_max_body_size no frontend/nginx.conf e tente novamente.';
+    }
+    if (/<html[\s\S]*<body/i.test(text)) {
+      return text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240) || 'O servidor retornou HTML em vez de JSON.';
+    }
+    if (/404|Not Found/i.test(text)) return 'Endpoint não encontrado no backend. Confira se o controller Spring existe para essa rota.';
+    if (/invalid cors request/i.test(text)) return 'Não foi possível acessar a API pelo navegador. Verifique o proxy /api do Nginx e o CORS no backend.';
+    if (/unknown error|http failure response/i.test(text)) return 'Não foi possível conectar ao servidor. Confira se backend e proxy /api estão ativos.';
+    return text || 'Não foi possível concluir a operação.';
   }
 }

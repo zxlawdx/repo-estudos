@@ -7,7 +7,14 @@ export function asRecord(value: unknown): UnknownRecord {
 export function pickString(source: unknown, keys: string[], fallback = ''): string {
   const obj = asRecord(source);
   for (const key of keys) {
-    const value = obj[key];
+    let value: unknown = obj[key];
+    if (value === undefined && key.includes('.')) {
+      value = key.split('.').reduce<unknown>((acc, part) => asRecord(acc)[part], obj);
+    }
+    if (value && typeof value === 'object') {
+      const nested = asRecord(value);
+      value = nested['name'] ?? nested['title'] ?? nested['label'] ?? '';
+    }
     if (value !== undefined && value !== null && String(value).trim() !== '') return String(value);
   }
   return fallback;

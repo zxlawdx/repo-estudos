@@ -26,8 +26,11 @@ public class FileProxyController {
     }
 
     @GetMapping
-    public Object list(@RequestParam Map<String, String> filters) {
-        return appsScriptClient.callForData("getFiles", filters);
+    public Object list(@RequestParam Map<String, String> filters, HttpServletRequest request) {
+        String token = BearerTokenUtils.extract(request);
+        Map<String, Object> payload = new LinkedHashMap<>(filters);
+        if (token != null) payload.put("accessToken", token);
+        return appsScriptClient.callForData("getFiles", payload);
     }
 
     @GetMapping("/{id}")

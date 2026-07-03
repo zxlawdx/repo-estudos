@@ -6,7 +6,7 @@ import { StudyMaterial } from '../../core/models/app.models';
 import { FilesService } from '../../core/services/files.service';
 import { ErrorMessageComponent } from '../../shared/components/error-message/error-message.component';
 import { LoadingComponent } from '../../shared/components/loading/loading.component';
-import { fileTitle, fileTypeLabel, formatDate, pickString, statusLabel } from '../../shared/utils/view.utils';
+import { asRecord, fileTitle, fileTypeLabel, formatDate, pickString, statusLabel } from '../../shared/utils/view.utils';
 
 @Component({
   selector: 'app-material-detail-page',
@@ -46,9 +46,9 @@ import { fileTitle, fileTypeLabel, formatDate, pickString, statusLabel } from '.
             <div class="safe-status-panel">
               <div class="safe-status-row"><span>Autor</span><b>{{ material()?.author || '—' }}</b></div>
               <div class="safe-status-row"><span>Ano</span><b>{{ material()?.year || '—' }}</b></div>
-              <div class="safe-status-row"><span>Categoria</span><b>{{ value(['category_name']) || '—' }}</b></div>
-              <div class="safe-status-row"><span>Assunto</span><b>{{ value(['subject_name']) || '—' }}</b></div>
-              <div class="safe-status-row"><span>Ciclo</span><b>{{ value(['cycle_name']) || '—' }}</b></div>
+              <div class="safe-status-row"><span>Categoria</span><b>{{ value(['category_name', 'categories.name', 'category']) || '—' }}</b></div>
+              <div class="safe-status-row"><span>Assunto</span><b>{{ value(['subject_name', 'subjects.name', 'subject']) || '—' }}</b></div>
+              <div class="safe-status-row"><span>Ciclo</span><b>{{ value(['cycle_name', 'cycles.name', 'cycle']) || '—' }}</b></div>
               <div class="safe-status-row"><span>Visibilidade</span><b>{{ material()?.visibility || '—' }}</b></div>
               <div class="safe-status-row"><span>Criado em</span><b>{{ createdAt() }}</b></div>
             </div>
@@ -75,9 +75,19 @@ export class MaterialDetailPageComponent implements OnInit {
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id') || '';
     this.files.detail(id).subscribe({
-      next: (res) => { this.material.set(res); this.loading.set(false); },
+      next: (res) => { this.applyResponse(res); this.loading.set(false); },
       error: (err: Error) => { this.error.set(err.message); this.loading.set(false); }
     });
+  }
+
+  private applyResponse(res: unknown): void {
+    const obj = asRecord(res);
+    const file = obj['file'];
+    if (file && typeof file === 'object') {
+      this.material.set({ ...(file as StudyMaterial), detail: obj });
+      return;
+    }
+    this.material.set(res as StudyMaterial);
   }
   id(): string { const m = this.material(); return String(m?.id || m?.material_id || m?.file_id || ''); }
   title(): string { return fileTitle(this.material()); }
@@ -85,7 +95,7 @@ export class MaterialDetailPageComponent implements OnInit {
   statusLabelOf(): string { return statusLabel(this.material()?.status); }
   value(keys: string[]): string { return pickString(this.material(), keys); }
   createdAt(): string { return formatDate(this.material()?.created_at); }
-  externalUrl(): string { return pickString(this.material(), ['google_drive_url', 'google_drive_preview_url', 'preview_url', 'url']); }
-  previewUrl(): string { return pickString(this.material(), ['google_drive_preview_url', 'preview_url', 'url']); }
+  externalUrl(): string { return pickString(this.material(), ['google_drive_web_url', 'google_drive_url', 'external_url', 'google_drive_preview_url', 'preview_url', 'url']); }
+  previewUrl(): string { return pickString(this.material(), ['embed_url', 'google_drive_preview_url', 'preview_url', 'external_url', 'url']); }
   safePreviewUrl(): SafeResourceUrl { return this.sanitizer.bypassSecurityTrustResourceUrl(this.previewUrl()); }
 }
