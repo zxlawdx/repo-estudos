@@ -18,6 +18,7 @@ repositories {
 }
 
 dependencies {
+    implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("org.springframework.boot:spring-boot-h2console")
 
     implementation("org.springframework.boot:spring-boot-starter-webmvc")

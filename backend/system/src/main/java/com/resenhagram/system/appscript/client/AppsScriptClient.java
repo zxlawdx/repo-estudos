@@ -1,22 +1,19 @@
 package com.resenhagram.system.appscript.client;
 
-import com.resenhagram.system.appscript.AppsScriptException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.resenhagram.system.appscript.dto.AppsScriptRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * Único ponto de comunicação com a API privada do Apps Script.
- *
- * Angular -> Spring Boot -> Apps Script API -> Drive/Supabase/Upstash
- *
- * O Spring é o único chamador desta API; o segredo nunca é exposto
- * ao frontend.
- */
 @Component
 public class AppsScriptClient {
 
@@ -26,62 +23,130 @@ public class AppsScriptClient {
     @Value("${APPS_SCRIPT_API_SECRET:}")
     private String appsScriptApiSecret;
 
-    private final RestClient restClient = RestClient.create();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /**
-     * Executa uma action no Apps Script e retorna o mapa cru da resposta
-     * (incluindo eventuais campos extras retornados pelas funções legadas,
-     * como file, fileId, accessToken, etc.).
-     */
-    @SuppressWarnings("unchecked")
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(20))
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
+
     public Map<String, Object> call(String action, Object payload) {
-        if (appsScriptApiUrl == null || appsScriptApiUrl.isBlank()) {
-            throw new AppsScriptException("APPS_SCRIPT_API_URL não configurada no backend.");
-        }
-        if (appsScriptApiSecret == null || appsScriptApiSecret.isBlank()) {
-            throw new AppsScriptException("APPS_SCRIPT_API_SECRET não configurada no backend.");
-        }
-
-        AppsScriptRequest request = new AppsScriptRequest(appsScriptApiSecret, action, payload == null ? new LinkedHashMap<>() : payload);
-
-        Map<String, Object> response;
         try {
-            response = restClient.post()
-                    .uri(appsScriptApiUrl)
-                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                    .body(request)
-                    .retrieve()
-                    .body(Map.class);
-        } catch (Exception ex) {
-            throw new AppsScriptException("Falha ao comunicar com o Apps Script (action=" + action + "): " + ex.getMessage(), ex);
-        }
+            if (appsScriptApiUrl == null || appsScriptApiUrl.isBlank()) {
+                return error("APPS_SCRIPT_API_URL não configurada no backend.", 500);
+            }
 
-        if (response == null) {
-            throw new AppsScriptException("Resposta vazia do Apps Script (action=" + action + ").");
-        }
+            if (appsScriptApiSecret == null || appsScriptApiSecret.isBlank()) {
+                return error("APPS_SCRIPT_API_SECRET não configurada no backend.", 500);
+            }
 
-        Object okField = response.get("ok");
-        boolean ok = okField == null || Boolean.TRUE.equals(okField);
-        if (!ok) {
-            Object error = response.get("error");
-            throw new AppsScriptException(error != null ? error.toString() : "Erro desconhecido no Apps Script (action=" + action + ").");
-        }
+            AppsScriptRequest requestBody = new AppsScriptRequest(
+                    appsScriptApiSecret,
+                    action,
+                    payload == null ? new LinkedHashMap<>() : payload
+            );
 
-        return response;
+            String json = objectMapper.writeValueAsString(requestBody);
+
+            HttpResponse<String> response = postThenFollowAsGet(appsScriptApiUrl, json);
+
+            int status = response.statusCode();
+            String body = response.body();
+
+            if (status < 200 || status >= 300) {
+                return error("Apps Script retornou HTTP " + status + ": " + preview(body), status);
+            }
+
+            if (body == null || body.isBlank()) {
+                return error("Resposta vazia do Apps Script.", 502);
+            }
+
+            if (!body.trim().startsWith("{")) {
+                return error("Apps Script retornou HTML/texto em vez de JSON: " + preview(body), 502);
+            }
+
+            return objectMapper.readValue(body, new TypeReference<Map<String, Object>>() {});
+
+        } catch (Exception e) {
+            return error("Falha ao comunicar com o Apps Script: " + e.getMessage(), 502);
+        }
     }
 
-    /**
-     * Atalho para quando a action retorna o payload útil dentro de "data".
-     * Caso a resposta legada não tenha "data" (campos soltos na raiz),
-     * retorna a resposta inteira menos o campo "ok".
-     */
     public Object callForData(String action, Object payload) {
         Map<String, Object> response = call(action, payload);
+
+        if (Boolean.FALSE.equals(response.get("ok"))) {
+            return response;
+        }
+
         if (response.containsKey("data")) {
             return response.get("data");
         }
+
         Map<String, Object> copy = new LinkedHashMap<>(response);
         copy.remove("ok");
         return copy;
+    }
+
+    private HttpResponse<String> postThenFollowAsGet(String url, String json) throws Exception {
+        URI uri = URI.create(url);
+
+        HttpRequest postRequest = HttpRequest.newBuilder(uri)
+                .timeout(Duration.ofSeconds(60))
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
+
+        for (int i = 0; i < 5; i++) {
+            int status = response.statusCode();
+
+            if (!(status == 301 || status == 302 || status == 303 || status == 307 || status == 308)) {
+                return response;
+            }
+
+            String location = response.headers().firstValue("Location").orElse(null);
+
+            if (location == null || location.isBlank()) {
+                return response;
+            }
+
+            uri = uri.resolve(location);
+
+            HttpRequest getRequest = HttpRequest.newBuilder(uri)
+                    .timeout(Duration.ofSeconds(60))
+                    .header("Accept", "application/json")
+                    .GET()
+                    .build();
+
+            response = httpClient.send(getRequest, HttpResponse.BodyHandlers.ofString());
+        }
+
+        throw new RuntimeException("Muitos redirecionamentos ao chamar Apps Script.");
+    }
+
+    private Map<String, Object> error(String message, int status) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("ok", false);
+        map.put("message", message);
+        map.put("error", message);
+        map.put("status", status);
+        return map;
+    }
+
+    private String preview(String body) {
+        if (body == null) {
+            return "";
+        }
+
+        String clean = body.replaceAll("\\s+", " ").trim();
+
+        if (clean.length() > 300) {
+            return clean.substring(0, 300) + "...";
+        }
+
+        return clean;
     }
 }
