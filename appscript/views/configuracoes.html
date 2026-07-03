@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?></head>
+<body class="bg-background">
+
+<?!= include('partials/sidebar'); ?>
+<div class="main-content">
+  <?!= include('partials/topbar'); ?>
+
+  <main class="page-content">
+    <div class="page-header">
+      <h2>Configurações</h2>
+      <p>Diagnóstico seguro do app, cache de servidor e parâmetros de publicação.</p>
+    </div>
+
+    <div id="settingsError" style="display:none;background:#ffdad6;border:1px solid #ba1a1a;color:#93000a;border-radius:16px;padding:16px;margin-bottom:16px"></div>
+
+    <div class="settings-grid">
+      <section class="settings-card">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+          <span class="material-symbols-outlined" style="color:#004ac6">dns</span>
+          <h3 style="font-size:17px;font-weight:700;color:#191c1e">Cache de servidor — Upstash Redis REST</h3>
+        </div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Use para acelerar listas públicas como categorias, trilhas e metadados. Nenhum token salvo é devolvido ao navegador.</p>
+
+        <div id="cacheSafeStatus" class="safe-status-panel" style="margin-bottom:14px">
+          <div class="safe-status-row"><span>Status</span><b>Carregando…</b></div>
+        </div>
+
+        <div class="filter-select" style="margin-bottom:12px">
+          <label>URL REST do Upstash</label>
+          <input id="cacheUrlInput" type="url" class="form-control" placeholder="Cole a URL apenas para configurar/trocar" autocomplete="off" value="">
+          <small style="font-size:12px;color:var(--text-muted);margin-top:4px">A URL salva nunca é preenchida de volta neste campo.</small>
+        </div>
+        <div class="filter-select" style="margin-bottom:12px">
+          <label>Token REST do Upstash</label>
+          <input id="cacheTokenInput" type="password" class="form-control" placeholder="Cole o token REST apenas para configurar/trocar" autocomplete="new-password" value="">
+          <small id="tokenConfiguredHint" style="font-size:12px;color:var(--text-muted);margin-top:4px">Token configurado: carregando…</small>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button id="saveCacheBtn" class="btn-primary" onclick="saveCacheConfig()" style="border-radius:12px;padding:11px 15px">
+            <span class="material-symbols-outlined" style="font-size:18px">save</span> Salvar cache
+          </button>
+          <button id="testCacheBtn" class="btn-secondary" onclick="testCache()" style="border-radius:12px;padding:11px 15px">
+            <span class="material-symbols-outlined" style="font-size:18px">network_check</span> Testar
+          </button>
+        </div>
+        <div id="cacheTestResult" class="safe-message" style="margin-top:14px;display:none"></div>
+      </section>
+
+      <section class="settings-card">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+          <span class="material-symbols-outlined" style="color:#004ac6">health_and_safety</span>
+          <h3 style="font-size:17px;font-weight:700;color:#191c1e">Diagnóstico seguro</h3>
+        </div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Mostra apenas status e valores mascarados. Não exibe JSON, access token, refresh token, service key ou token do Redis.</p>
+        <div id="diagSafeBox" class="safe-status-panel">
+          <div class="safe-status-row"><span>App</span><b>Carregando…</b></div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+          <button class="btn-secondary" onclick="loadDiagnostics(true)" style="border-radius:12px;padding:10px 14px">Atualizar diagnóstico</button>
+          <button class="btn-secondary" onclick="clearClientCache()" style="border-radius:12px;padding:10px 14px">Limpar cache do navegador</button>
+        </div>
+      </section>
+
+      <section class="settings-card">
+        <h3 style="font-size:17px;font-weight:700;color:var(--text-primary);margin-bottom:12px">Publicação correta</h3>
+        <div class="safe-status-panel">
+          <div class="safe-status-row"><span>Tipo de deploy</span><b>Web app</b></div>
+          <div class="safe-status-row"><span>Executar como</span><b>Me</b></div>
+          <div class="safe-status-row"><span>Acesso</span><b>Anyone ou Anyone with Google account</b></div>
+          <div class="safe-status-row"><span>Depois de alterar arquivos</span><b>Criar nova versão/deploy e abrir a URL /exec nova</b></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="safe-bottom-pad"></div>
+  </main>
+</div>
+
+<?!= include('partials/bottomnav'); ?>
+<?!= include('scripts/app'); ?>
+<script>
+onDomReady(function(){ loadDiagnostics(false); });
+
+function yesNo(v){ return v ? 'sim' : 'não'; }
+function badgeText(v){ return '<span class="badge '+(v?'badge-approved':'badge-archived')+'">'+(v?'configurado':'não configurado')+'</span>'; }
+function row(label, value) {
+  return '<div class="safe-status-row"><span>' + escHtml(label) + '</span><b>' + value + '</b></div>';
+}
+function plain(value){ return escHtml(value == null || value === '' ? '—' : String(value)); }
+
+function renderCacheStatus(cache) {
+  cache = cache || {};
+  document.getElementById('cacheSafeStatus').innerHTML =
+    row('Upstash', badgeText(!!cache.configured)) +
+    row('URL REST', plain(cache.urlMasked || (cache.configured ? 'mascarada' : 'não configurada'))) +
+    row('Token configurado', badgeText(!!cache.tokenConfigured));
+  document.getElementById('cacheUrlInput').value = '';
+  document.getElementById('cacheTokenInput').value = '';
+  document.getElementById('tokenConfiguredHint').textContent = 'Token configurado: ' + yesNo(!!cache.tokenConfigured);
+  document.getElementById('cacheTokenInput').placeholder = cache.tokenConfigured ? 'Token configurado: sim — cole outro apenas para trocar' : 'Cole o token REST aqui';
+}
+
+function renderDiagnostics(res) {
+  res = res || {};
+  var cfg = res.config || {};
+  var drive = res.drive || {};
+  var profile = res.profile || {};
+  document.getElementById('diagSafeBox').innerHTML =
+    row('App', plain(res.app || 'Repositório de Estudos')) +
+    row('Horário do diagnóstico', plain(res.time || '—')) +
+    row('Usuário', plain(profile.display_name || '—')) +
+    row('Perfil', plain(profile.role || '—')) +
+    row('Supabase URL', plain(cfg.supabaseUrlMasked || '—')) +
+    row('Supabase URL configurada', badgeText(!!cfg.supabaseUrlConfigured)) +
+    row('Anon key', badgeText(!!cfg.anonKeyConfigured)) +
+    row('Service key', badgeText(!!cfg.serviceKeyConfigured)) +
+    row('Drive folder', plain(cfg.driveFolderIdMasked || '—')) +
+    row('Drive configurado', badgeText(!!cfg.driveFolderConfigured)) +
+    row('Estrutura do Drive', badgeText(!!drive.ok)) +
+    row('App URL', badgeText(!!cfg.appUrlConfigured));
+  renderCacheStatus(res.cache || {});
+}
+
+function showSettingsError(title, message) {
+  var box = document.getElementById('settingsError');
+  box.style.display = 'block';
+  box.innerHTML = '<b>' + escHtml(title || 'Erro') + '</b><br>' + escHtml(message || 'Erro desconhecido') +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
+    '<button class="btn-secondary" onclick="navigate(\'dashboard\')">Ir para dashboard</button>' +
+    '<button class="btn-secondary" onclick="loadDiagnostics(true)">Tentar novamente</button></div>';
+}
+
+function loadDiagnostics(showMsg) {
+  var token = sessionStorage.getItem('RE_ACCESS_TOKEN') || '';
+  google.script.run.withSuccessHandler(function(res){
+    document.getElementById('settingsError').style.display = 'none';
+    if (!res || !res.ok) {
+      showSettingsError('Falha no diagnóstico', (res && res.error) || 'Resposta inválida do servidor.');
+      return;
+    }
+    renderDiagnostics(res);
+    if (showMsg) showToast('Diagnóstico seguro atualizado.', 'success');
+  }).withFailureHandler(function(err){
+    showSettingsError('Erro no diagnóstico', (err && err.message) || String(err));
+  }).getSystemDiagnostics(token);
+}
+
+function saveCacheConfig() {
+  var btn = document.getElementById('saveCacheBtn');
+  setBtnLoading(btn, true, 'Salvando…');
+  document.getElementById('cacheTestResult').style.display = 'none';
+  google.script.run.withSuccessHandler(function(res){
+    setBtnLoading(btn, false);
+    if (res && res.ok) {
+      renderCacheStatus(res.cache || { configured:true, tokenConfigured:true });
+      document.getElementById('cacheTestResult').style.display = 'block';
+      document.getElementById('cacheTestResult').innerHTML = '<b>Cache salvo.</b> Teste: ' + escHtml(res.testOk ? 'OK' : 'não confirmado') + '.';
+      showToast('Cache salvo nas Propriedades do Script.', 'success');
+      loadDiagnostics(false);
+    } else {
+      showToast((res && res.error) || 'Erro ao salvar cache.', 'error', 7000);
+    }
+  }).withFailureHandler(function(err){
+    setBtnLoading(btn, false);
+    showToast((err && err.message) || String(err), 'error', 7000);
+  }).saveServerCacheConfig({
+    accessToken: sessionStorage.getItem('RE_ACCESS_TOKEN') || '',
+    url: document.getElementById('cacheUrlInput').value.trim(),
+    token: document.getElementById('cacheTokenInput').value.trim()
+  });
+}
+
+function testCache() {
+  var btn = document.getElementById('testCacheBtn');
+  setBtnLoading(btn, true, 'Testando…');
+  google.script.run.withSuccessHandler(function(res){
+    setBtnLoading(btn, false);
+    document.getElementById('cacheTestResult').style.display = 'block';
+    document.getElementById('cacheTestResult').innerHTML = '<b>Resultado do teste:</b> ' + escHtml(res && res.ok ? 'OK' : ((res && res.message) || 'falhou')) +
+      '<br><span>Upstash configurado: ' + yesNo(res && res.configured) + '</span>';
+    showToast(res && res.ok ? 'Cache respondeu OK.' : 'Cache não respondeu OK.', res && res.ok ? 'success' : 'error', 7000);
+  }).withFailureHandler(function(err){
+    setBtnLoading(btn, false);
+    showToast((err && err.message) || String(err), 'error');
+  }).testarCacheUpstash();
+}
+
+function clearClientCache() {
+  clearPageCache();
+  try { sessionStorage.removeItem('RE_CATEGORIES_CACHE'); } catch(_) {}
+  showToast('Cache do navegador limpo.', 'success');
+}
+</script>
+</body>
+</html>

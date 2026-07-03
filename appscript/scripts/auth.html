@@ -1,0 +1,209 @@
+<script>
+// ============================================================
+// AuthSessionManager v2 — Persistência entre F5, refresh token
+// Usa localStorage para sobreviver ao reload.
+// NUNCA expõe service key ou tokens no console.
+// ============================================================
+
+window.AuthSessionManager = (function(){
+  var STORAGE_KEY = 'RE_AUTH_SESSION_V2';
+  var _session = null;   // { accessToken, refreshToken, expiresAt, user, profile }
+  var _profile = null;
+  var _ready   = false;
+  var _callbacks = [];
+
+  // ── Persistência ──────────────────────────────────────────
+  function _save(sess) {
+    _session = sess;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        accessToken:  sess.accessToken  || '',
+        refreshToken: sess.refreshToken || '',
+        expiresAt:    sess.expiresAt    || 0,
+        user:    _strip(sess.user    || {}),
+        profile: _strip(sess.profile || {})
+      }));
+      // Compatibilidade com código antigo que lê sessionStorage
+      sessionStorage.setItem('RE_ACCESS_TOKEN',  sess.accessToken  || '');
+      sessionStorage.setItem('RE_REFRESH_TOKEN', sess.refreshToken || '');
+      sessionStorage.setItem('RE_USER',    JSON.stringify(_strip(sess.user    || {})));
+      sessionStorage.setItem('RE_PROFILE', JSON.stringify(_strip(sess.profile || {})));
+    } catch(_){}
+  }
+
+  function _load() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch(_){}
+    // Fallback para sessionStorage (sessões antigas)
+    var token = sessionStorage.getItem('RE_ACCESS_TOKEN') || '';
+    if (token) {
+      return {
+        accessToken:  token,
+        refreshToken: sessionStorage.getItem('RE_REFRESH_TOKEN') || '',
+        expiresAt:    0,
+        user:    JSON.parse(sessionStorage.getItem('RE_USER')    || '{}'),
+        profile: JSON.parse(sessionStorage.getItem('RE_PROFILE') || '{}')
+      };
+    }
+    return null;
+  }
+
+  function _clear() {
+    _session = null; _profile = null;
+    try { localStorage.removeItem(STORAGE_KEY); } catch(_){}
+    try {
+      sessionStorage.removeItem('RE_ACCESS_TOKEN');
+      sessionStorage.removeItem('RE_REFRESH_TOKEN');
+      sessionStorage.removeItem('RE_USER');
+      sessionStorage.removeItem('RE_PROFILE');
+    } catch(_){}
+    // Limpar theme NOT — o tema persiste mesmo após logout
+  }
+
+  // Remover campos sensíveis desnecessários
+  function _strip(obj) {
+    if (!obj) return {};
+    var safe = {};
+    var allowed = ['id','email','display_name','role','status','avatar_url',
+                   'created_at','last_seen_at'];
+    allowed.forEach(function(k){ if(obj[k]!==undefined) safe[k]=obj[k]; });
+    return safe;
+  }
+
+  function _isExpired(sess) {
+    if (!sess || !sess.accessToken) return true;
+    if (!sess.expiresAt) return false; // expiresAt desconhecido → tentar
+    return (Date.now() / 1000) > (sess.expiresAt - 60); // 60s de margem
+  }
+
+  // ── Boot: restaurar sessão ao carregar a página ────────────
+  function restoreOnBoot(onDone) {
+    var saved = _load();
+
+    if (!saved || !saved.accessToken) {
+      // Sem sessão salva → ir para login
+      _ready = true; _profile = null;
+      _flush(null);
+      if (onDone) onDone(null);
+      return;
+    }
+
+    if (!_isExpired(saved)) {
+      // Token parece válido → validar no backend rapidamente
+      _verifyWithBackend(saved, onDone);
+    } else if (saved.refreshToken) {
+      // Token expirado mas temos refresh token → renovar
+      _doRefresh(saved.refreshToken, saved, onDone);
+    } else {
+      // Expirado sem refresh → login
+      _clear();
+      _ready = true; _profile = null;
+      _flush(null);
+      if (onDone) onDone(null);
+    }
+  }
+
+  function _verifyWithBackend(saved, onDone) {
+    google.script.run
+      .withSuccessHandler(function(p) {
+        if (p && p.id) {
+          // Perfil ok
+          _profile = p;
+          _session = saved;
+          _session.profile = p;
+          _save(_session);
+          // Sincronizar com REPOSITORY_SESSION global
+          if (window.REPOSITORY_SESSION) window.REPOSITORY_SESSION.accessToken = saved.accessToken;
+          _ready = true;
+          _flush(p);
+          if (onDone) onDone(p);
+        } else if (saved.refreshToken) {
+          // Token inválido mas temos refresh → tentar renovar
+          _doRefresh(saved.refreshToken, saved, onDone);
+        } else {
+          _clear(); _ready = true; _profile = null;
+          _flush(null); if (onDone) onDone(null);
+        }
+      })
+      .withFailureHandler(function() {
+        // Falha de rede → usar dados em cache por ora
+        _profile = saved.profile || null;
+        _session = saved;
+        if (window.REPOSITORY_SESSION) window.REPOSITORY_SESSION.accessToken = saved.accessToken;
+        _ready = true;
+        _flush(_profile);
+        if (onDone) onDone(_profile);
+      })
+      .getMyProfile(saved.accessToken);
+  }
+
+  function _doRefresh(refreshToken, saved, onDone) {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.ok && res.accessToken) {
+          var newSess = {
+            accessToken:  res.accessToken,
+            refreshToken: res.refreshToken || refreshToken,
+            expiresAt:    res.expiresAt    || 0,
+            user:    res.user    || saved.user    || {},
+            profile: res.profile || saved.profile || {}
+          };
+          _save(newSess);
+          _profile = newSess.profile;
+          if (window.REPOSITORY_SESSION) window.REPOSITORY_SESSION.accessToken = res.accessToken;
+          _ready = true;
+          _flush(_profile);
+          if (onDone) onDone(_profile);
+        } else {
+          _clear(); _ready = true; _profile = null;
+          _flush(null); if (onDone) onDone(null);
+        }
+      })
+      .withFailureHandler(function() {
+        // Falha de rede → usar dados em cache
+        _profile = saved.profile || null;
+        _session = saved;
+        if (window.REPOSITORY_SESSION) window.REPOSITORY_SESSION.accessToken = saved.accessToken||'';
+        _ready = true; _flush(_profile);
+        if (onDone) onDone(_profile);
+      })
+      .refreshSupabaseSession(refreshToken);
+  }
+
+  function _flush(p) {
+    _callbacks.forEach(function(cb){ try{ cb(p); }catch(_){} });
+    _callbacks = [];
+  }
+
+  // ── API pública ────────────────────────────────────────────
+  function saveSession(sess) { _save(sess); _profile = sess.profile || null; }
+  function getAccessToken() { return (_session && _session.accessToken) || sessionStorage.getItem('RE_ACCESS_TOKEN') || ''; }
+  function getProfile() { return _profile; }
+  function isReady() { return _ready; }
+  function canEdit() { return _profile && (_profile.role==='admin'||_profile.role==='editor'); }
+  function isAdmin() { return _profile && _profile.role==='admin'; }
+  function logout() { _clear(); }
+  function onReady(cb) {
+    if (_ready) { try{ cb(_profile); }catch(_){} }
+    else { _callbacks.push(cb); }
+  }
+
+  return {
+    restoreOnBoot:restoreOnBoot, saveSession:saveSession,
+    getAccessToken:getAccessToken, getProfile:getProfile,
+    isReady:isReady, canEdit:canEdit, isAdmin:isAdmin,
+    logout:logout, onReady:onReady
+  };
+})();
+
+// Compatibilidade com código antigo que usa AUTH.init / AUTH.profile
+window.AUTH = {
+  init: function(){ /* boot feito pelo app.html */ },
+  onReady: function(cb){ AuthSessionManager.onReady(cb); },
+  profile: function(){ return AuthSessionManager.getProfile(); },
+  canEdit: function(){ return AuthSessionManager.canEdit(); },
+  isAdmin: function(){ return AuthSessionManager.isAdmin(); }
+};
+</script>

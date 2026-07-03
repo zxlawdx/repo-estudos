@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?></head>
+<body class="bg-background">
+
+<?!= include('partials/sidebar'); ?>
+<div class="main-content">
+  <?!= include('partials/topbar'); ?>
+
+  <main class="page-content">
+    <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div>
+        <h2>Histórico de Atividades</h2>
+        <p>Auditoria completa de todas as ações no repositório.</p>
+      </div>
+      <button onclick="exportHistory()" class="btn-secondary" style="border-radius:100px;padding:8px 18px;font-size:13px;display:flex;align-items:center;gap:6px">
+        <span class="material-symbols-outlined" style="font-size:18px">download</span> Exportar
+      </button>
+    </div>
+
+    <!-- Stats rápidos -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px" id="histStats">
+      <div class="skeleton" style="height:80px;border-radius:12px"></div>
+      <div class="skeleton" style="height:80px;border-radius:12px"></div>
+      <div class="skeleton" style="height:80px;border-radius:12px"></div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filter-bar" style="margin-bottom:20px">
+      <div class="filter-select">
+        <label>Ação</label>
+        <select id="fAction" onchange="loadHistory()">
+          <option value="">Todas</option>
+          <option value="file_uploaded">Upload</option>
+          <option value="file_renamed">Renomeado</option>
+          <option value="file_approved">Aprovado</option>
+          <option value="file_rejected">Rejeitado</option>
+          <option value="category_changed">Cat. alterada</option>
+          <option value="progress_updated">Progresso</option>
+          <option value="drive_renamed">Drive</option>
+        </select>
+      </div>
+      <div class="filter-select">
+        <label>De</label>
+        <input type="date" id="fFrom" onchange="loadHistory()" style="border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;color:var(--text-primary);outline:none;background:var(--surface);width:100%">
+      </div>
+      <div class="filter-select">
+        <label>Até</label>
+        <input type="date" id="fTo" onchange="loadHistory()" style="border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;color:var(--text-primary);outline:none;background:var(--surface);width:100%">
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    <div id="timeline" style="max-width:720px">
+      <? for(var i=0;i<4;i++) { ?>
+      <div class="skeleton" style="height:80px;border-radius:14px;margin-bottom:12px"></div>
+      <? } ?>
+    </div>
+
+    <!-- Paginação simples -->
+    <div id="loadMoreWrap" style="text-align:center;margin-top:20px;display:none">
+      <button onclick="loadMore()" id="loadMoreBtn" class="btn-secondary" style="border-radius:100px;padding:9px 24px;font-size:14px">
+        Carregar mais
+      </button>
+    </div>
+
+    <div class="safe-bottom-pad"></div>
+  </main>
+</div>
+
+<?!= include('partials/bottomnav'); ?>
+<?!= include('scripts/app'); ?>
+
+<script>
+var OFFSET = 0;
+var LIMIT  = 30;
+var ALL_ITEMS = [];
+
+var ACTION_META = {
+  file_uploaded:    { icon:'cloud_upload',    color:'#004ac6', bg:'#dbe1ff', label:'Upload realizado'        },
+  file_renamed:     { icon:'drive_file_rename_outline', color:'#7d2d00', bg:'#ffdbcd', label:'Arquivo renomeado' },
+  file_approved:    { icon:'verified',         color:'#065f46', bg:'#d1fae5', label:'Arquivo aprovado'        },
+  file_rejected:    { icon:'cancel',           color:'#93000a', bg:'#ffdad6', label:'Arquivo rejeitado'        },
+  category_changed: { icon:'category',         color:'#92400e', bg:'#fef3c7', label:'Categoria alterada'      },
+  tag_added:        { icon:'sell',             color:'#38485d', bg:'#d3e4fe', label:'Tag adicionada'           },
+  tag_removed:      { icon:'label_off',        color:'#434655', bg:'#f2f4f6', label:'Tag removida'             },
+  progress_updated: { icon:'trending_up',      color:'#004ac6', bg:'#dbe1ff', label:'Progresso atualizado'    },
+  drive_renamed:    { icon:'drive_file_move',  color:'#7d2d00', bg:'#ffdbcd', label:'Renomeado no Drive'       },
+  dependency_created:{ icon:'add_link',        color:'#065f46', bg:'#d1fae5', label:'Relação adicionada'      },
+  dependency_removed:{ icon:'link_off',        color:'#93000a', bg:'#ffdad6', label:'Relação removida'        },
+};
+
+onDomReady(function() {
+  loadSummary();
+  loadHistory();
+});
+
+function loadSummary() {
+  google.script.run.withSuccessHandler(function(res) {
+    if (!res || !res.ok) return;
+    var sa = res.byAction || {};
+    var total = res.total || 0;
+    var uploads   = sa.file_uploaded   || 0;
+    var approvals = sa.file_approved   || 0;
+    var renames   = sa.file_renamed    || 0;
+    document.getElementById('histStats').innerHTML = [
+      ['Ações totais (30d)', total,     'history',       '#004ac6','#dbe1ff'],
+      ['Uploads',            uploads,   'cloud_upload',  '#065f46','#d1fae5'],
+      ['Aprovações',         approvals, 'verified',      '#92400e','#fef3c7'],
+    ].map(function(s) {
+      return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:10px">' +
+        '<div style="width:40px;height:40px;border-radius:10px;background:'+s[4]+';display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+        '<span class="material-symbols-outlined" style="font-size:20px;color:'+s[3]+'">'+s[2]+'</span></div>' +
+        '<div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:700;letter-spacing:.04em">'+s[0]+'</div>' +
+        '<div style="font-size:22px;font-weight:700;color:#191c1e">'+s[1]+'</div></div></div>';
+    }).join('');
+  }).getActivitySummary(30, sessionStorage.getItem('RE_ACCESS_TOKEN') || '');
+}
+
+function loadHistory(reset) {
+  if (reset !== false) { OFFSET = 0; ALL_ITEMS = []; }
+  var opts = {
+    action:   document.getElementById('fAction').value || null,
+    dateFrom: document.getElementById('fFrom').value   || null,
+    dateTo:   document.getElementById('fTo').value     || null,
+    limit:    LIMIT,
+    offset:   OFFSET,
+    accessToken: sessionStorage.getItem('RE_ACCESS_TOKEN') || ''
+  };
+  var tl = document.getElementById('timeline');
+  if (OFFSET === 0) tl.innerHTML = '<div class="skeleton" style="height:80px;border-radius:14px;margin-bottom:12px"></div>'.repeat(4);
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res || !res.ok) return;
+      var items = res.history || [];
+      ALL_ITEMS = ALL_ITEMS.concat(items);
+      renderTimeline(OFFSET === 0);
+      OFFSET += items.length;
+      document.getElementById('loadMoreWrap').style.display = items.length === LIMIT ? 'block' : 'none';
+    })
+    .withFailureHandler(function(e){ showToast(e.message,'error'); })
+    .getHistoryFull(opts);
+}
+
+function loadMore() {
+  loadHistory(false);
+}
+
+function renderTimeline(reset) {
+  var tl   = document.getElementById('timeline');
+  if (reset) tl.innerHTML = '';
+  if (!ALL_ITEMS.length) {
+    tl.innerHTML = '<div class="empty-state"><span class="material-symbols-outlined">history</span>' +
+      '<h3 style="font-size:17px;font-weight:600;color:var(--text-primary);margin:8px 0 4px">Nenhum registro</h3>' +
+      '<p>Não há atividades com esses filtros.</p></div>';
+    return;
+  }
+
+  // Agrupa por dia
+  var byDay = {};
+  ALL_ITEMS.forEach(function(h) {
+    var day = (h.created_at||'').slice(0,10);
+    if (!byDay[day]) byDay[day] = [];
+    byDay[day].push(h);
+  });
+
+  var html = '';
+  var sortedDays = Object.keys(byDay).sort().reverse();
+  sortedDays.forEach(function(day) {
+    html += '<div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;' +
+      'color:var(--text-muted);padding:14px 0 8px;margin-top:4px;border-bottom:1px solid var(--border);margin-bottom:10px">' +
+      fmtDate(day + 'T12:00:00') + '</div>';
+    byDay[day].forEach(function(h) {
+      var meta = ACTION_META[h.action] || { icon:'history', color:'#737686', bg:'#f2f4f6', label:h.action };
+      var fname = (h.study_files && (h.study_files.final_name || h.study_files.original_name)) || '—';
+      var user  = (h.profiles && h.profiles.display_name) || '—';
+      var after = {};
+      if (h.after_value) {
+        if (typeof h.after_value === 'string') {
+          try { after = JSON.parse(h.after_value || '{}'); } catch(e) { after = {}; }
+        } else {
+          after = h.after_value;
+        }
+      }
+
+      html += '<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid #f2f4f6;' +
+        'cursor:pointer;transition:background .15s;border-radius:10px;padding:10px 8px" ' +
+        'class="hover-lift" ' +
+        (h.study_files ? 'onclick="navigate(\'detalhe\',{id:\''+(h.study_files.id||'')+'\'});event.stopPropagation()"' : '') + '>' +
+        '<div style="width:38px;height:38px;border-radius:10px;background:'+meta.bg+';flex-shrink:0;' +
+        'display:flex;align-items:center;justify-content:center">' +
+        '<span class="material-symbols-outlined" style="font-size:20px;color:'+meta.color+'">'+meta.icon+'</span></div>' +
+        '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:2px">' + meta.label + '</div>' +
+        '<div style="font-size:12px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(fname) + '</div>' +
+        (after.name ? '<div style="font-size:12px;color:var(--primary);margin-top:2px">→ '+escHtml(after.name)+'</div>' : '') +
+        '</div>' +
+        '<div style="text-align:right;flex-shrink:0">' +
+        '<div style="font-size:11px;color:#737686">' + ((h.created_at||'').slice(11,16)) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;font-weight:500">' + escHtml(user) + '</div>' +
+        '</div></div>';
+    });
+  });
+  if (reset) tl.innerHTML = html;
+  else tl.innerHTML += html;
+}
+
+function exportHistory() {
+  var items = ALL_ITEMS;
+  if (!items.length) { showToast('Nenhum dado para exportar.','error'); return; }
+  var csv = 'Data,Ação,Arquivo,Usuário,Detalhes\n';
+  items.forEach(function(h) {
+    var meta  = ACTION_META[h.action] || {label:h.action};
+    var fname = (h.study_files && h.study_files.final_name) || (h.study_files && h.study_files.original_name) || '';
+    var user  = (h.profiles && h.profiles.display_name) || '';
+    var after = h.after_value ? JSON.stringify(h.after_value) : '';
+    csv += [h.created_at, meta.label, fname, user, after].map(function(v){ return '"'+(v||'').replace(/"/g,'""')+'"'; }).join(',') + '\n';
+  });
+  var blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href   = url; a.download = 'historico_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV exportado!','success');
+}
+</script>
+</body>
+</html>

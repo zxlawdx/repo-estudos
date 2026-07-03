@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?></head>
+<body class="bg-background">
+<?!= include('partials/sidebar'); ?>
+<div class="main-content">
+  <?!= include('partials/topbar'); ?>
+  <main class="page-content">
+    <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div>
+        <h2 style="margin-bottom:4px">Resenhas e Comentários</h2>
+        <p>Compartilhe análises, notas de leitura e debates sobre os materiais estudados.</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-secondary" onclick="toggleReviewFilters()" style="border-radius:999px;padding:9px 14px"><span class="material-symbols-outlined" style="font-size:17px;vertical-align:middle">tune</span> Filtros</button>
+        <button class="btn-secondary" onclick="openReviewComposer('comment')" style="border-radius:999px;padding:9px 14px"><span class="material-symbols-outlined" style="font-size:17px;vertical-align:middle">add_comment</span> Comentar material</button>
+        <button class="btn-primary" onclick="openReviewComposer('review')" style="border-radius:999px;padding:9px 18px"><span class="material-symbols-outlined" style="font-size:17px;vertical-align:middle">edit</span> Nova resenha</button>
+      </div>
+    </div>
+
+    <div id="reviewsError" style="display:none"></div>
+
+    <div class="reviews-toolbar">
+      <div style="position:relative;flex:1;min-width:240px;max-width:640px">
+        <span class="material-symbols-outlined" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:20px">search</span>
+        <input id="reviewSearch" class="form-control" type="search" placeholder="Buscar por livro, autor, tema, usuário ou conteúdo..." style="padding-left:40px" oninput="debounceReviews()">
+      </div>
+      <button class="btn-secondary" onclick="loadReviews(true)" style="border-radius:999px;padding:9px 12px"><span class="material-symbols-outlined" style="font-size:18px">refresh</span></button>
+    </div>
+
+    <div class="reviews-tabs" id="reviewTabs">
+      <button class="review-tab active" data-review-tab="" onclick="setReviewTab('',this)">Todas</button>
+      <button class="review-tab" data-review-tab="review" onclick="setReviewTab('review',this)">Resenhas críticas</button>
+      <button class="review-tab" data-review-tab="comment" onclick="setReviewTab('comment',this)">Comentários</button>
+      <button class="review-tab" data-review-tab="reading_note" onclick="setReviewTab('reading_note',this)">Notas de leitura</button>
+      <button class="review-tab" data-review-tab="question" onclick="setReviewTab('question',this)">Perguntas</button>
+      <button class="review-tab" data-review-tab="mine" onclick="setReviewTab('mine',this)">Minhas publicações</button>
+    </div>
+
+    <section class="reviews-layout">
+      <div class="reviews-feed" id="reviewsFeed">
+        <div class="skeleton" style="height:180px;border-radius:18px"></div>
+        <div class="skeleton" style="height:160px;border-radius:18px"></div>
+      </div>
+
+      <aside class="reviews-side" id="reviewsSide">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <h3 style="font-size:16px;font-weight:800;margin:0">Filtros</h3>
+          <button class="btn-secondary" onclick="clearReviewFilters()" style="border:none;padding:6px;font-size:12px">Limpar</button>
+        </div>
+        <div class="review-filter-group">
+          <label>Material</label>
+          <select id="reviewMaterialFilter" class="form-control" onchange="loadReviews(true)"><option value="">Todos os materiais</option></select>
+        </div>
+        <div class="review-filter-group">
+          <label>Trilha</label>
+          <select id="reviewPathFilter" class="form-control" onchange="loadReviews(true)"><option value="">Todas as trilhas</option></select>
+        </div>
+        <div class="review-filter-group">
+          <label>Ordenação</label>
+          <select id="reviewSort" class="form-control" onchange="loadReviews(true)">
+            <option value="recent">Mais recentes</option>
+            <option value="likes">Mais curtidas</option>
+            <option value="comments">Mais comentadas</option>
+            <option value="saves">Mais salvas</option>
+          </select>
+        </div>
+        <div class="review-filter-group">
+          <label>Sobre esta tela</label>
+          <p style="font-size:13px;color:var(--text-muted);margin:0;line-height:1.45">Resenhas ficam ligadas aos materiais da biblioteca e podem ser públicas para debate. O texto é renderizado como texto puro para evitar HTML perigoso.</p>
+        </div>
+      </aside>
+    </section>
+
+    <button class="reviews-fab" onclick="openReviewComposer('review')" title="Nova resenha"><span class="material-symbols-outlined">edit</span></button>
+    <div class="safe-bottom-pad"></div>
+  </main>
+</div>
+
+<!-- Modal composer -->
+<div id="modalReviewComposer" class="modal-backdrop" style="display:none">
+  <div class="modal-box" style="max-width:920px;width:min(920px,96vw)">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div>
+        <h3 id="reviewComposerTitle" style="font-size:17px;font-weight:800;margin:0">Nova resenha</h3>
+        <p style="font-size:12px;color:var(--text-muted);margin:2px 0 0">Escreva uma análise, nota de leitura, pergunta ou comentário sobre um material.</p>
+      </div>
+      <button class="btn-secondary" onclick="closeModal('modalReviewComposer')" style="border:none;padding:6px"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="review-modal-grid" style="padding:18px 20px">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="filter-select">
+          <label>Material relacionado</label>
+          <select id="reviewMaterialSelect" class="form-control"><option value="">Carregando materiais…</option></select>
+        </div>
+        <div class="filter-select">
+          <label>Título</label>
+          <input id="reviewTitleInput" class="form-control" placeholder="Ex: A alienação colonial e a construção da identidade">
+        </div>
+        <div class="filter-select">
+          <label>Texto</label>
+          <textarea id="reviewBodyInput" class="form-control review-composer-textarea" placeholder="Escreva sua análise, comentário, dúvida ou crítica sobre o material..."></textarea>
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin:0">Dica: evite resumo vazio. Explique sua interpretação, cite páginas se possível e relacione com conceitos do grafo.</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="filter-select">
+          <label>Tipo da publicação</label>
+          <select id="reviewTypeSelect" class="form-control">
+            <option value="review">Resenha crítica</option>
+            <option value="comment">Comentário</option>
+            <option value="reading_note">Nota de leitura</option>
+            <option value="question">Pergunta</option>
+          </select>
+        </div>
+        <div class="filter-select">
+          <label>Avaliação opcional</label>
+          <select id="reviewRatingInput" class="form-control">
+            <option value="">Sem avaliação</option>
+            <option value="5">5 estrelas</option><option value="4">4 estrelas</option><option value="3">3 estrelas</option><option value="2">2 estrelas</option><option value="1">1 estrela</option>
+          </select>
+        </div>
+        <div class="filter-select">
+          <label>Visibilidade</label>
+          <select id="reviewVisibilitySelect" class="form-control">
+            <option value="public">Pública</option>
+            <option value="private">Privada</option>
+            <option value="path_only">Somente membros da trilha</option>
+          </select>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary)"><input type="checkbox" id="reviewSpoilerInput"> Marcar spoiler</label>
+        <div class="filter-select">
+          <label>Tags</label>
+          <input id="reviewTagsInput" class="form-control" placeholder="Fanon, colonialismo, racismo">
+        </div>
+        <p id="reviewComposerError" style="font-size:13px;color:var(--error);margin:0"></p>
+        <button class="btn-secondary" onclick="submitReviewPost('draft')" style="border-radius:12px;padding:10px">Salvar rascunho</button>
+        <button id="reviewPublishBtn" class="btn-primary" onclick="submitReviewPost('published')" style="border-radius:12px;padding:12px">Publicar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Detalhe / comentários -->
+<div id="reviewBackdrop" class="review-backdrop" onclick="closeReviewDetail()"></div>
+<aside id="reviewDetailSheet" class="review-detail-sheet" aria-label="Detalhe da resenha">
+  <div class="review-detail-sheet-inner" id="reviewDetailContent"></div>
+</aside>
+
+<?!= include('partials/bottomnav'); ?>
+<?!= include('scripts/app'); ?>
+
+<script>
+function reviewGetQueryParam(name) {
+  try {
+    var search = String((window.location && window.location.search) || '');
+    if (!search) return '';
+    if (search.charAt(0) === '?') search = search.substring(1);
+    var parts = search.split('&');
+    for (var i = 0; i < parts.length; i++) {
+      var pair = parts[i].split('=');
+      var key = decodeURIComponent(String(pair[0] || '').replace(/\+/g, ' '));
+      if (key === name) {
+        return decodeURIComponent(String(pair.slice(1).join('=') || '').replace(/\+/g, ' '));
+      }
+    }
+    return '';
+  } catch (e) { return ''; }
+}
+
+if (typeof window.escHtml !== 'function') {
+  window.escHtml = function(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
+}
+if (typeof window.onDomReady !== 'function') {
+  window.onDomReady = function(fn) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+    else fn();
+  };
+}
+if (typeof window.fmtDate !== 'function') {
+  window.fmtDate = function(value) {
+    if (!value) return '';
+    try { return new Date(value).toLocaleDateString('pt-BR'); } catch (e) { return String(value); }
+  };
+}
+if (typeof window.fileTypeBadge !== 'function') {
+  window.fileTypeBadge = function(type) {
+    type = String(type || 'material').toUpperCase();
+    return '<span class="badge badge-secondary">' + escHtml(type) + '</span>';
+  };
+}
+if (typeof window.showToast !== 'function') {
+  window.showToast = function(message, type) {
+    try { alert(message); } catch (e) {}
+  };
+}
+if (typeof window.setBtnLoading !== 'function') {
+  window.setBtnLoading = function(btn, loading, label) {
+    if (!btn) return;
+    btn.disabled = !!loading;
+    if (label) btn.textContent = label;
+  };
+}
+
+var reviewState = {
+  tab: '',
+  posts: [],
+  offset: 0,
+  limit: 20,
+  loading: false,
+  filtersLoaded: false,
+  materialId: reviewGetQueryParam('materialId') || '',
+  pathId: reviewGetQueryParam('pathId') || ''
+};
+var reviewDebounceTimer = null;
+
+function reviewToken() {
+  return (window.AuthSessionManager && AuthSessionManager.getAccessToken && AuthSessionManager.getAccessToken()) ||
+    (window.REPOSITORY_SESSION && window.REPOSITORY_SESSION.accessToken) ||
+    sessionStorage.getItem('RE_ACCESS_TOKEN') ||
+    localStorage.getItem('RE_ACCESS_TOKEN') || '';
+}
+function jsArg(v) { return JSON.stringify(String(v == null ? '' : v)); }
+function jsAttrArg(v) { return escHtml(jsArg(v)); }
+function reviewPostTypeLabel(t) {
+  return { review:'Resenha crítica', comment:'Comentário', reading_note:'Nota de leitura', question:'Pergunta' }[t] || 'Publicação';
+}
+function reviewMaterialName(m) {
+  return (m && (m.final_name || m.suggested_name || m.original_name || m.title)) || 'Material';
+}
+function reviewAvatarHtml(name, url) {
+  var safeName = escHtml(name || 'Usuário');
+  var safeUrl = String(url || '').trim();
+  if (safeUrl) return '<img src="' + escHtml(safeUrl) + '" alt="' + safeName + '" referrerpolicy="no-referrer" loading="lazy">';
+  return '<span class="material-symbols-outlined" title="' + safeName + '">account_circle</span>';
+}
+
+onDomReady(function() {
+  loadReviewFilters();
+  if (reviewState.materialId) {
+    var mf = document.getElementById('reviewMaterialFilter');
+    if (mf) mf.value = reviewState.materialId;
+  }
+  loadReviews(true);
+  var compose = reviewGetQueryParam('compose');
+  if (compose) setTimeout(function(){ openReviewComposer(compose); }, 350);
+});
+
+function setReviewTab(tab, btn) {
+  reviewState.tab = tab || '';
+  document.querySelectorAll('.review-tab').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  loadReviews(true);
+}
+function debounceReviews() {
+  clearTimeout(reviewDebounceTimer);
+  reviewDebounceTimer = setTimeout(function(){ loadReviews(true); }, 260);
+}
+function toggleReviewFilters(force) {
+  var el = document.getElementById('reviewsSide');
+  if (!el) return;
+  var open = el.classList.contains('open');
+  if (force !== undefined) open = !force;
+  el.classList.toggle('open', !open);
+}
+function clearReviewFilters() {
+  var search = document.getElementById('reviewSearch');
+  var material = document.getElementById('reviewMaterialFilter');
+  var path = document.getElementById('reviewPathFilter');
+  if (search) search.value = '';
+  if (material) material.value = '';
+  if (path) path.value = '';
+  reviewState.tab = '';
+  document.querySelectorAll('.review-tab').forEach(function(b){ b.classList.toggle('active', !b.getAttribute('data-review-tab')); });
+  loadReviews(true);
+}
+
+function loadReviewFilters() {
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) {
+        var pf = document.getElementById('reviewPathFilter');
+        if (pf) {
+          pf.innerHTML = '<option value="">Todas as trilhas</option>' + (res.paths || []).map(function(p){
+            return '<option value="' + escHtml(p.id) + '">' + escHtml(p.title || 'Trilha') + '</option>';
+          }).join('');
+        }
+      }
+      loadReviewMaterials();
+    })
+    .withFailureHandler(function(){ loadReviewMaterials(); })
+    .listReviewFilters({ accessToken: reviewToken() });
+}
+function loadReviewMaterials() {
+  google.script.run
+    .withSuccessHandler(function(res) {
+      var mats = (res && res.ok && res.materials) || [];
+      var opts = '<option value="">Todos os materiais</option>' + mats.map(function(m){
+        return '<option value="' + escHtml(m.id) + '">' + escHtml(reviewMaterialName(m)) + '</option>';
+      }).join('');
+      var mf = document.getElementById('reviewMaterialFilter');
+      if (mf) { mf.innerHTML = opts; if (reviewState.materialId) mf.value = reviewState.materialId; }
+      var ms = document.getElementById('reviewMaterialSelect');
+      if (ms) {
+        ms.innerHTML = '<option value="">Selecione um material…</option>' + mats.map(function(m){
+          return '<option value="' + escHtml(m.id) + '">' + escHtml(reviewMaterialName(m)) + '</option>';
+        }).join('');
+        if (reviewState.materialId) ms.value = reviewState.materialId;
+      }
+    })
+    .withFailureHandler(function(){
+      var ms = document.getElementById('reviewMaterialSelect');
+      if (ms) ms.innerHTML = '<option value="">Erro ao carregar materiais</option>';
+    })
+    .listReviewMaterials({ accessToken: reviewToken(), limit: 100 });
+}
+
+function loadReviews(reset) {
+  if (reviewState.loading) return;
+  reviewState.loading = true;
+  var feed = document.getElementById('reviewsFeed');
+  if (reset && feed) {
+    reviewState.offset = 0;
+    feed.innerHTML = '<div class="skeleton" style="height:180px;border-radius:18px"></div><div class="skeleton" style="height:160px;border-radius:18px"></div>';
+  }
+  var postType = (reviewState.tab && reviewState.tab !== 'mine') ? reviewState.tab : '';
+  var params = {
+    accessToken: reviewToken(),
+    limit: reviewState.limit,
+    offset: reviewState.offset,
+    search: (document.getElementById('reviewSearch') || {}).value || '',
+    postType: postType,
+    mine: reviewState.tab === 'mine',
+    materialId: (document.getElementById('reviewMaterialFilter') || {}).value || reviewState.materialId || '',
+    pathId: (document.getElementById('reviewPathFilter') || {}).value || reviewState.pathId || ''
+  };
+  google.script.run
+    .withSuccessHandler(function(res) {
+      reviewState.loading = false;
+      if (!res || !res.ok) { showReviewsError((res && res.error) || 'Erro ao carregar resenhas.', res && res.stack); return; }
+      reviewState.posts = reset ? (res.posts || []) : reviewState.posts.concat(res.posts || []);
+      renderReviews(res.posts || [], reset);
+    })
+    .withFailureHandler(function(e) {
+      reviewState.loading = false;
+      showReviewsError((e && e.message) || String(e), e && e.stack);
+    })
+    .listReviews(params);
+}
+
+function renderReviews(posts, reset) {
+  var feed = document.getElementById('reviewsFeed');
+  if (!feed) return;
+  if (reset && (!posts || !posts.length)) {
+    feed.innerHTML = '<div class="review-empty"><span class="material-symbols-outlined">rate_review</span><h3 style="font-weight:800;margin:0 0 6px;color:var(--text-primary)">Ainda não há resenhas públicas</h3><p style="margin:0 0 14px">Comece publicando uma análise sobre um material da biblioteca.</p><button class="btn-primary" onclick="openReviewComposer(\'review\')" style="border-radius:999px;padding:10px 16px">Nova resenha</button></div>';
+    return;
+  }
+  var html = (posts || []).map(renderReviewCard).join('');
+  if (reset) feed.innerHTML = html;
+  else feed.insertAdjacentHTML('beforeend', html);
+}
+function renderReviewCard(p) {
+  var m = p.material || {};
+  var avatar = reviewAvatarHtml(p.author_name, p.author_avatar_url);
+  var tags = (p.tags || []).map(function(t){ return '<span class="review-tag">#' + escHtml(t) + '</span>'; }).join('');
+  var rating = p.rating ? '<span class="review-rating"><span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:\'FILL\' 1">star</span>' + escHtml(p.rating) + '</span>' : '';
+  var body = String(p.body || '');
+  var excerpt = body.length > 380 ? body.substring(0, 380) + '…' : body;
+  var materialIcon = 'menu_book';
+  if (m.source_type === 'youtube_video') materialIcon = 'smart_display';
+  if (m.source_type === 'youtube_playlist') materialIcon = 'video_library';
+  return '<article class="review-card" id="review_' + escHtml(p.id) + '">' +
+    '<div class="review-card-head"><div class="review-avatar">' + avatar + '</div><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><strong>' + escHtml(p.author_name || 'Usuário') + '</strong><span class="badge badge-secondary">' + escHtml(p.post_type_label || reviewPostTypeLabel(p.post_type)) + '</span>' + rating + '</div><span style="font-size:12px;color:var(--text-muted)">' + fmtDate(p.created_at) + '</span></div><p style="font-size:12px;color:var(--primary);font-weight:700;margin:2px 0 0">Material: ' + escHtml(p.material_title || reviewMaterialName(m)) + '</p></div></div>' +
+    '<h3 class="review-card-title">' + escHtml(p.title || reviewPostTypeLabel(p.post_type)) + '</h3><div class="review-card-body">' + escHtml(excerpt) + '</div>' +
+    '<div class="review-material-card"><div class="review-material-icon"><span class="material-symbols-outlined">' + materialIcon + '</span></div><div style="flex:1;min-width:0"><strong style="font-size:13px">' + escHtml(p.material_title || reviewMaterialName(m)) + '</strong><p style="font-size:12px;color:var(--text-muted);margin:2px 0 0">' + escHtml(p.material_author || m.author || '') + '</p>' + fileTypeBadge(p.material_type || m.file_type || m.source_type) + '</div><button class="btn-secondary" onclick="navigate(\'detalhe\',{id:' + jsAttrArg(p.material_id) + '})" style="border-radius:999px;padding:7px 10px;font-size:12px">Abrir</button></div>' +
+    (tags ? '<div class="review-tags">' + tags + '</div>' : '') +
+    '<div class="review-actions"><div class="review-action-group">' +
+      '<button class="review-action ' + (p.viewer_liked ? 'active is-active' : '') + '" aria-pressed="' + (p.viewer_liked ? 'true' : 'false') + '" onclick="toggleReviewLike(\'post\',' + jsAttrArg(p.id) + ')"><span class="material-symbols-outlined">thumb_up</span><span>' + escHtml(p.like_count || 0) + '</span></button>' +
+      '<button class="review-action" onclick="openReviewDetail(' + jsAttrArg(p.id) + ')"><span class="material-symbols-outlined">chat_bubble</span><span>Debate (' + escHtml(p.comment_count || 0) + ')</span></button>' +
+      '<button class="review-action ' + (p.viewer_saved ? 'active is-active' : '') + '" aria-pressed="' + (p.viewer_saved ? 'true' : 'false') + '" onclick="toggleReviewSave(' + jsAttrArg(p.id) + ')"><span class="material-symbols-outlined">bookmark</span><span>' + escHtml(p.save_count || 0) + '</span></button>' +
+    '</div><button class="review-action" onclick="openReviewDetail(' + jsAttrArg(p.id) + ')"><span class="material-symbols-outlined">visibility</span> Ver completo</button></div>' +
+  '</article>';
+}
+
+function openReviewComposer(type) {
+  type = type || 'review';
+  var typeSelect = document.getElementById('reviewTypeSelect');
+  var title = document.getElementById('reviewComposerTitle');
+  var err = document.getElementById('reviewComposerError');
+  if (typeSelect) typeSelect.value = type;
+  if (title) title.textContent = type === 'comment' ? 'Comentar material' : type === 'question' ? 'Nova pergunta' : 'Nova resenha';
+  if (err) err.textContent = '';
+  var titleInput = document.getElementById('reviewTitleInput');
+  var bodyInput = document.getElementById('reviewBodyInput');
+  var ratingInput = document.getElementById('reviewRatingInput');
+  var tagsInput = document.getElementById('reviewTagsInput');
+  var spoilerInput = document.getElementById('reviewSpoilerInput');
+  if (titleInput) titleInput.value = '';
+  if (bodyInput) bodyInput.value = '';
+  if (ratingInput) ratingInput.value = '';
+  if (tagsInput) tagsInput.value = '';
+  if (spoilerInput) spoilerInput.checked = false;
+  var mf = (document.getElementById('reviewMaterialFilter') || {}).value || reviewState.materialId || '';
+  var ms = document.getElementById('reviewMaterialSelect');
+  if (mf && ms) ms.value = mf;
+  openModal('modalReviewComposer');
+}
+function submitReviewPost(status) {
+  var btn = document.getElementById('reviewPublishBtn');
+  var err = document.getElementById('reviewComposerError');
+  if (err) err.textContent = '';
+  var materialSelect = document.getElementById('reviewMaterialSelect');
+  var payload = {
+    accessToken: reviewToken(),
+    materialId: materialSelect ? materialSelect.value : '',
+    postType: (document.getElementById('reviewTypeSelect') || {}).value || 'review',
+    title: (document.getElementById('reviewTitleInput') || {}).value || '',
+    body: (document.getElementById('reviewBodyInput') || {}).value || '',
+    rating: (document.getElementById('reviewRatingInput') || {}).value || '',
+    hasSpoiler: !!((document.getElementById('reviewSpoilerInput') || {}).checked),
+    visibility: (document.getElementById('reviewVisibilitySelect') || {}).value || 'public',
+    tags: (document.getElementById('reviewTagsInput') || {}).value || '',
+    status: status || 'published'
+  };
+  setBtnLoading(btn, true, status === 'draft' ? 'Salvando…' : 'Publicando…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setBtnLoading(btn, false, 'Publicar');
+      if (res && res.ok) { showToast(status === 'draft' ? 'Rascunho salvo.' : 'Publicado!', 'success'); closeModal('modalReviewComposer'); loadReviews(true); }
+      else if (err) err.textContent = (res && res.error) || 'Erro ao publicar.';
+    })
+    .withFailureHandler(function(e) { setBtnLoading(btn, false, 'Publicar'); if (err) err.textContent = (e && e.message) || String(e); })
+    .createReviewPost(payload);
+}
+
+function openReviewDetail(postId) {
+  var sheet = document.getElementById('reviewDetailSheet'), bd = document.getElementById('reviewBackdrop'), content = document.getElementById('reviewDetailContent');
+  if (!sheet || !bd || !content) return;
+  content.innerHTML = '<div class="skeleton" style="height:220px;border-radius:18px"></div>';
+  sheet.classList.add('open'); bd.classList.add('open'); document.body.style.overflow = 'hidden';
+  google.script.run
+    .withSuccessHandler(function(res) { if (!res || !res.ok) { content.innerHTML = '<div class="error-box">' + escHtml((res && res.error) || 'Erro ao carregar detalhe.') + '</div>'; return; } renderReviewDetail(res.post, res.comments || []); })
+    .withFailureHandler(function(e) { content.innerHTML = '<div class="error-box">' + escHtml((e && e.message) || String(e)) + '</div>'; })
+    .getReviewDetail({ accessToken: reviewToken(), id: postId });
+}
+function closeReviewDetail() {
+  var sheet = document.getElementById('reviewDetailSheet'), bd = document.getElementById('reviewBackdrop');
+  if (sheet) sheet.classList.remove('open');
+  if (bd) bd.classList.remove('open');
+  document.body.style.overflow = '';
+}
+function renderReviewDetail(p, comments) {
+  var content = document.getElementById('reviewDetailContent');
+  if (!content) return;
+  var m = p.material || {};
+  var authorAvatar = reviewAvatarHtml(p.author_name, p.author_avatar_url);
+  content.innerHTML =
+    '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div style="display:flex;align-items:flex-start;gap:12px;min-width:0"><div class="review-avatar" style="width:48px;height:48px">' + authorAvatar + '</div><div style="min-width:0"><span class="badge badge-primary">' + escHtml(p.post_type_label || reviewPostTypeLabel(p.post_type)) + '</span><h2 style="font-size:22px;font-weight:900;margin:8px 0 4px">' + escHtml(p.title || 'Publicação') + '</h2><p style="font-size:13px;color:var(--text-muted);margin:0">Por <strong>' + escHtml(p.author_name || 'Usuário') + '</strong> · ' + fmtDate(p.created_at) + '</p></div></div><button class="btn-secondary" onclick="closeReviewDetail()" style="border:none;padding:6px"><span class="material-symbols-outlined">close</span></button></div>' +
+    '<div class="review-material-card"><div class="review-material-icon"><span class="material-symbols-outlined">menu_book</span></div><div style="flex:1"><strong>' + escHtml(p.material_title || reviewMaterialName(m)) + '</strong><p style="font-size:12px;color:var(--text-muted);margin:2px 0 0">' + escHtml(p.material_author || m.author || '') + '</p></div><button class="btn-primary" onclick="navigate(\'detalhe\',{id:' + jsAttrArg(p.material_id) + '})" style="border-radius:999px;padding:8px 12px">Abrir material</button></div>' +
+    '<div class="review-card-body" style="font-size:15px;color:var(--text-primary);margin-top:14px">' + escHtml(p.body || '') + '</div>' +
+    '<div class="review-actions"><div class="review-action-group">' +
+      '<button class="review-action ' + (p.viewer_liked ? 'active is-active' : '') + '" aria-pressed="' + (p.viewer_liked ? 'true' : 'false') + '" onclick="toggleReviewLike(\'post\',' + jsAttrArg(p.id) + ')"><span class="material-symbols-outlined">thumb_up</span>' + escHtml(p.like_count || 0) + '</button>' +
+      '<button class="review-action ' + (p.viewer_saved ? 'active is-active' : '') + '" aria-pressed="' + (p.viewer_saved ? 'true' : 'false') + '" onclick="toggleReviewSave(' + jsAttrArg(p.id) + ')"><span class="material-symbols-outlined">bookmark</span>Salvar</button>' +
+      '<button class="review-action" onclick="navigate(\'grafo\')"><span class="material-symbols-outlined">hub</span>Ver no grafo</button>' +
+    '</div></div>' +
+    '<h3 style="font-size:17px;font-weight:800;margin:18px 0 10px">Debate</h3><div id="reviewCommentsList" class="review-detail-comments">' + renderReviewComments(comments) + '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:12px"><input id="newReviewComment" class="form-control" placeholder="Responder ao debate..." onkeydown="if(event.key===\'Enter\') submitReviewComment(' + jsAttrArg(p.id) + ')"><button class="btn-primary" onclick="submitReviewComment(' + jsAttrArg(p.id) + ')" style="border-radius:12px;padding:10px 14px">Responder</button></div>';
+}
+function renderReviewComments(comments) {
+  if (!comments || !comments.length) return '<div class="review-empty" style="padding:16px"><p style="margin:0">Ainda não há comentários. Seja o primeiro a debater.</p></div>';
+  return comments.map(function(c) {
+    var avatar = reviewAvatarHtml(c.author_name, c.author_avatar_url);
+    return '<div class="review-comment ' + (c.parent_comment_id ? 'child' : '') + '"><div style="display:flex;gap:10px;align-items:flex-start"><div class="review-avatar" style="width:34px;height:34px">' + avatar + '</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong>' + escHtml(c.author_name || 'Usuário') + '</strong><span style="font-size:11px;color:var(--text-muted)">' + fmtDate(c.created_at) + '</span></div><p style="white-space:pre-wrap;font-size:13px;margin:6px 0 0;color:var(--text-secondary)">' + escHtml(c.body || '') + '</p><button class="review-action ' + (c.viewer_liked ? 'active is-active' : '') + '" aria-pressed="' + (c.viewer_liked ? 'true' : 'false') + '" onclick="toggleReviewLike(\'comment\',' + jsAttrArg(c.id) + ')"><span class="material-symbols-outlined">thumb_up</span>' + escHtml(c.like_count || 0) + '</button></div></div></div>';
+  }).join('');
+}
+function submitReviewComment(postId) {
+  var input = document.getElementById('newReviewComment');
+  var body = (input && input.value || '').trim();
+  if (!body) { showToast('Comentário vazio.', 'error'); return; }
+  google.script.run
+    .withSuccessHandler(function(res) { if (res && res.ok) { input.value = ''; openReviewDetail(postId); showToast('Comentário enviado.', 'success'); loadReviews(true); } else showToast((res && res.error) || 'Erro ao comentar.', 'error'); })
+    .withFailureHandler(function(e) { showToast((e && e.message) || String(e), 'error'); })
+    .createReviewComment({ accessToken: reviewToken(), postId: postId, body: body });
+}
+function toggleReviewLike(targetType, targetId) {
+  google.script.run
+    .withSuccessHandler(function(res) { if (res && res.ok) { showToast(res.active ? 'Curtido.' : 'Curtida removida.', 'success', 1600); loadReviews(true); } else showToast((res && res.error) || 'Erro.', 'error'); })
+    .withFailureHandler(function(e) { showToast((e && e.message) || String(e), 'error'); })
+    .toggleReviewReaction({ accessToken: reviewToken(), targetType: targetType, targetId: targetId });
+}
+function toggleReviewSave(postId) {
+  google.script.run
+    .withSuccessHandler(function(res) { if (res && res.ok) { showToast(res.active ? 'Salvo.' : 'Removido dos salvos.', 'success', 1600); loadReviews(true); } else showToast((res && res.error) || 'Erro.', 'error'); })
+    .withFailureHandler(function(e) { showToast((e && e.message) || String(e), 'error'); })
+    .toggleReviewSave({ accessToken: reviewToken(), postId: postId });
+}
+function showReviewsError(message, stack) {
+  var el = document.getElementById('reviewsError');
+  if (!el) return;
+  el.style.display = 'block';
+  el.innerHTML = '<div class="settings-card" style="border-color:var(--error);background:var(--surface);margin-bottom:16px"><span class="badge badge-rejected">ERRO VISÍVEL</span><h3 style="color:var(--error);font-size:18px;margin:10px 0 6px">Erro ao carregar resenhas</h3><p>' + escHtml(message || 'Erro desconhecido') + '</p>' + (stack ? '<pre class="debug-box" style="font-size:11px;max-height:120px">' + escHtml(stack) + '</pre>' : '') + '<button class="btn-primary" onclick="loadReviews(true)" style="border-radius:999px;padding:8px 14px">Tentar novamente</button></div>';
+}
+</script>
+</body>
+</html>

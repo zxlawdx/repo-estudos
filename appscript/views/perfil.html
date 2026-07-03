@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?></head>
+<body class="bg-background">
+
+<?!= include('partials/sidebar'); ?>
+<div class="main-content">
+  <?!= include('partials/topbar'); ?>
+
+  <main class="page-content">
+    <div class="page-header">
+      <h2>Meu perfil</h2>
+      <p>Dados do usuário logado, foto no Google Drive, materiais enviados, trilhas e progresso.</p>
+    </div>
+
+    <div id="profileError" style="display:none;background:#ffdad6;border:1px solid #ba1a1a;color:#93000a;border-radius:16px;padding:16px;margin-bottom:16px"></div>
+
+    <div class="profile-grid">
+      <section class="settings-card profile-card">
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px;min-width:0">
+          <div id="profileAvatar" class="profile-avatar">U</div>
+          <div style="min-width:0;flex:1">
+            <h3 id="profileName" style="font-size:20px;font-weight:700;color:var(--text-primary);line-height:1.2;overflow:hidden;text-overflow:ellipsis">Usuário</h3>
+            <p id="profileEmail" style="font-size:13px;color:var(--text-muted);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">—</p>
+            <span id="profileRole" class="badge badge-secondary" style="margin-top:8px">viewer</span>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="filter-select">
+            <label>Nome de exibição</label>
+            <input id="displayNameInput" type="text" autocomplete="name" placeholder="Seu nome" class="form-control">
+          </div>
+
+          <div class="filter-select">
+            <label>Foto de perfil — Google Drive</label>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <input id="photoInput" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" style="display:none" onchange="handlePhotoSelect(this.files[0])">
+              <button type="button" class="btn-secondary" onclick="document.getElementById('photoInput').click()" style="border-radius:12px;padding:10px 14px">
+                <span class="material-symbols-outlined" style="font-size:18px">add_photo_alternate</span>
+                Escolher foto
+              </button>
+              <button id="uploadPhotoBtn" type="button" class="btn-primary" onclick="uploadProfilePhoto()" style="border-radius:12px;padding:10px 14px;flex:0 0 auto" disabled>
+                <span class="material-symbols-outlined" style="font-size:18px">cloud_upload</span>
+                Enviar foto
+              </button>
+            </div>
+            <p id="photoHelp" style="font-size:12px;color:var(--text-muted);margin-top:8px">Aceita JPG, PNG ou WEBP até 5 MB. O arquivo físico fica em Drive/perfis/fotos.</p>
+            <div id="photoPreviewBox" style="display:none;margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:12px;align-items:center;gap:12px">
+              <img id="photoPreview" alt="Prévia da foto" style="width:72px;height:72px;border-radius:20px;object-fit:cover;border:1px solid #c3c6d7">
+              <div style="min-width:0">
+                <div id="photoName" style="font-size:13px;font-weight:700;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+                <div id="photoSize" style="font-size:12px;color:var(--text-muted);margin-top:2px"></div>
+              </div>
+            </div>
+          </div>
+
+          <button id="saveProfileBtn" class="btn-primary" onclick="saveProfile()" style="border-radius:12px;padding:12px 16px;flex:0 0 auto">
+            <span class="material-symbols-outlined" style="font-size:18px">save</span>
+            Salvar nome
+          </button>
+        </div>
+      </section>
+
+      <section class="settings-card">
+        <h3 style="font-size:17px;font-weight:700;color:var(--text-primary);margin-bottom:12px">Resumo</h3>
+        <div class="stats-grid" style="margin-bottom:16px">
+          <div class="stat-card compact"><div><div class="stat-label">Materiais enviados</div><div id="stFiles" class="stat-value">—</div></div></div>
+          <div class="stat-card compact"><div><div class="stat-label">Concluídos</div><div id="stDone" class="stat-value">—</div></div></div>
+          <div class="stat-card compact"><div><div class="stat-label">Ações recentes</div><div id="stActions" class="stat-value">—</div></div></div>
+        </div>
+        <div id="sessionBox" class="safe-status-panel">
+          <div class="safe-status-row"><span>Sessão</span><b>Carregando…</b></div>
+        </div>
+      </section>
+    </div>
+
+    <section class="settings-card" style="margin-top:18px">
+      <h3 style="font-size:17px;font-weight:700;color:var(--text-primary);margin-bottom:12px">Materiais enviados por mim</h3>
+      <div id="myMaterials" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px"></div>
+    </section>
+
+    <section class="settings-card" style="margin-top:18px">
+      <h3 style="font-size:17px;font-weight:700;color:var(--text-primary);margin-bottom:12px">Minhas trilhas</h3>
+      <div id="myPaths" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px"></div>
+    </section>
+
+    <section class="settings-card" style="margin-top:18px">
+      <h3 style="font-size:17px;font-weight:700;color:var(--text-primary);margin-bottom:12px">Progresso e histórico recente</h3>
+      <div id="myProgress" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px"></div>
+      <div id="myHistory" style="margin-top:12px;display:flex;flex-direction:column;gap:8px"></div>
+    </section>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
+      <button class="btn-secondary" onclick="navigate('configuracoes')" style="border-radius:10px;padding:10px 14px">
+        <span class="material-symbols-outlined" style="font-size:18px">settings</span> Configurações
+      </button>
+      <button class="btn-danger" onclick="handleLogout()" style="border-radius:10px;padding:10px 14px">
+        <span class="material-symbols-outlined" style="font-size:18px">logout</span> Sair
+      </button>
+    </div>
+
+    <div class="safe-bottom-pad"></div>
+  </main>
+</div>
+
+<?!= include('partials/bottomnav'); ?>
+<?!= include('scripts/app'); ?>
+<script>
+var selectedProfilePhoto = null;
+
+onDomReady(function(){
+  hydrateProfileFromStorage();
+  loadProfileStats();
+});
+
+function profileToken(){ return sessionStorage.getItem('RE_ACCESS_TOKEN') || ''; }
+
+function currentSessionObjects_(){
+  var sess = window.REPOSITORY_SESSION || {};
+  var user = sess.user || {};
+  var profile = sess.profile || {};
+  try { user = Object.assign({}, user, JSON.parse(sessionStorage.getItem('RE_USER') || '{}')); } catch(_) {}
+  try { profile = Object.assign({}, profile, JSON.parse(sessionStorage.getItem('RE_PROFILE') || '{}')); } catch(_) {}
+  return { sess:sess, user:user, profile:profile };
+}
+
+function renderAvatar(el, profile, user) {
+  if (!el) return;
+  var name = (profile && profile.display_name) || (user && user.email) || 'Usuário';
+  var url = profile && profile.avatar_url;
+  if (url) {
+    el.innerHTML = '<img src="' + escHtml(url) + '" alt="Foto de perfil" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">';
+  } else {
+    el.textContent = String(name || 'U').trim().charAt(0).toUpperCase() || 'U';
+  }
+}
+
+
+function safeProfileRow(label, value) {
+  return '<div class="safe-status-row"><span>' + escHtml(label) + '</span><b>' + value + '</b></div>';
+}
+function safeBadge(ok, yesText, noText) {
+  return '<span class="badge ' + (ok ? 'badge-approved' : 'badge-archived') + '">' + escHtml(ok ? (yesText || 'sim') : (noText || 'não')) + '</span>';
+}
+function renderProfileSessionStatus(profile) {
+  var box = document.getElementById('sessionBox');
+  if (!box) return;
+  box.innerHTML =
+    safeProfileRow('Sessão ativa', safeBadge(!!profileToken(), 'sim', 'não')) +
+    safeProfileRow('Permissão', escHtml((profile && profile.role) || 'viewer')) +
+    safeProfileRow('Access token exibido', safeBadge(false, 'sim', 'não')) +
+    safeProfileRow('Refresh token exibido', safeBadge(false, 'sim', 'não')) +
+    safeProfileRow('Foto de perfil', safeBadge(!!(profile && profile.avatar_url), 'enviada via Drive', 'avatar por inicial'));
+}
+
+function hydrateProfileFromStorage() {
+  var ctx = currentSessionObjects_();
+  var user = ctx.user || {};
+  var profile = ctx.profile || {};
+  var name = profile.display_name || user.email || 'Usuário';
+  document.getElementById('profileName').textContent = name;
+  document.getElementById('profileEmail').textContent = user.email || profile.email || 'E-mail não disponível';
+  document.getElementById('profileRole').textContent = profile.role || 'viewer';
+  document.getElementById('displayNameInput').value = profile.display_name || '';
+  renderAvatar(document.getElementById('profileAvatar'), profile, user);
+  renderProfileSessionStatus(profile);
+  try { hydrateShellUser_(); } catch(_) {}
+}
+
+function loadProfileStats() {
+  var token = profileToken();
+  if (!token) { showProfileError('Sessão ausente', 'Carregar perfil', 'Faça login novamente para carregar dados do perfil.'); return; }
+  google.script.run.withSuccessHandler(function(res){
+    if (!res || !res.ok) { showProfileError('Erro no perfil', 'Carregar estatísticas', (res && res.error) || 'Resposta inválida.'); return; }
+    mergeProfileToStorage_(res.profile);
+    hydrateProfileFromStorage();
+    document.getElementById('stFiles').textContent = (res.files && res.files.total) || 0;
+    document.getElementById('stDone').textContent = (res.progress && res.progress.completed) || 0;
+    document.getElementById('stActions').textContent = res.actions || 0;
+    renderMaterials(res.files && res.files.recent || []);
+    renderPaths(res.paths || []);
+    renderProgress(res.recentProgress || []);
+    renderHistory(res.history || []);
+  }).withFailureHandler(function(err){
+    showProfileError('Erro no perfil', 'Carregar estatísticas', (err && err.message) || String(err), err && err.stack);
+  }).getMyStats(token);
+}
+
+function mergeProfileToStorage_(profile) {
+  if (!profile) return;
+  try {
+    var p = JSON.parse(sessionStorage.getItem('RE_PROFILE') || '{}');
+    Object.keys(profile).forEach(function(k){ p[k] = profile[k]; });
+    sessionStorage.setItem('RE_PROFILE', JSON.stringify(p));
+    window.REPOSITORY_SESSION = window.REPOSITORY_SESSION || {};
+    window.REPOSITORY_SESSION.profile = p;
+  } catch(_) {}
+}
+
+function showProfileError(title, action, message, stack) {
+  var el = document.getElementById('profileError');
+  el.style.display = 'block';
+  el.innerHTML = '<b>' + escHtml(title || 'Erro') + '</b><br>' +
+    '<span>Ação: ' + escHtml(action || '-') + '</span><br>' +
+    '<span>' + escHtml(message || 'Erro desconhecido') + '</span>' +
+    (stack ? '<pre style="white-space:pre-wrap;margin-top:8px">' + escHtml(String(stack).split('\n').slice(0,8).join('\n')) + '</pre>' : '') +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
+    '<button class="btn-secondary" onclick="navigate(\'biblioteca\')">Voltar para biblioteca</button>' +
+    '<button class="btn-primary" onclick="navigate(\'dashboard\')" style="flex:0 0 auto">Ir para dashboard</button>' +
+    '<button class="btn-secondary" onclick="loadProfileStats()">Tentar novamente</button></div>';
+}
+
+function saveProfile() {
+  var btn = document.getElementById('saveProfileBtn');
+  setBtnLoading(btn, true, 'Salvando…');
+  var payload = {
+    accessToken: profileToken(),
+    display_name: document.getElementById('displayNameInput').value.trim()
+  };
+  google.script.run.withSuccessHandler(function(res){
+    setBtnLoading(btn, false);
+    if (res && res.ok) {
+      mergeProfileToStorage_(res.profile || payload);
+      hydrateProfileFromStorage();
+      clearPageCache();
+      showToast('Perfil salvo.', 'success');
+    } else showProfileError('Erro ao salvar perfil', 'Atualizar nome', (res && res.error) || 'Erro ao salvar perfil.');
+  }).withFailureHandler(function(err){
+    setBtnLoading(btn, false);
+    showProfileError('Erro ao salvar perfil', 'Atualizar nome', (err && err.message) || String(err), err && err.stack);
+  }).updateMyProfile(payload);
+}
+
+function handlePhotoSelect(file) {
+  selectedProfilePhoto = null;
+  document.getElementById('uploadPhotoBtn').disabled = true;
+  if (!file) return;
+  var allowed = ['image/jpeg','image/png','image/webp'];
+  if (allowed.indexOf(file.type) === -1) { showToast('Foto inválida. Envie JPG, PNG ou WEBP.', 'error'); return; }
+  if (file.size > 5 * 1024 * 1024) { showToast('Foto muito grande. Máximo: 5 MB.', 'error'); return; }
+  selectedProfilePhoto = file;
+  document.getElementById('photoName').textContent = file.name;
+  document.getElementById('photoSize').textContent = fmtSize(file.size) + ' · ' + file.type;
+  document.getElementById('photoPreviewBox').style.display = 'flex';
+  var r = new FileReader();
+  r.onload = function(ev){ document.getElementById('photoPreview').src = ev.target.result; };
+  r.readAsDataURL(file);
+  document.getElementById('uploadPhotoBtn').disabled = false;
+}
+
+function uploadProfilePhoto() {
+  if (!selectedProfilePhoto) return;
+  var btn = document.getElementById('uploadPhotoBtn');
+  setBtnLoading(btn, true, 'Enviando…');
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var base64 = String(e.target.result || '').split(',')[1] || '';
+    google.script.run.withSuccessHandler(function(res){
+      setBtnLoading(btn, false);
+      if (res && res.ok) {
+        mergeProfileToStorage_(res.profile || { avatar_url: res.avatarUrl });
+        selectedProfilePhoto = null;
+        document.getElementById('photoInput').value = '';
+        document.getElementById('photoPreviewBox').style.display = 'none';
+        document.getElementById('uploadPhotoBtn').disabled = true;
+        hydrateProfileFromStorage();
+        clearPageCache();
+        showToast('Foto de perfil atualizada no Google Drive.', 'success');
+      } else showProfileError('Erro na foto', 'Enviar foto para Google Drive', (res && res.error) || 'Erro ao enviar foto.');
+    }).withFailureHandler(function(err){
+      setBtnLoading(btn, false);
+      showProfileError('Erro na foto', 'Enviar foto para Google Drive', (err && err.message) || String(err), err && err.stack);
+    }).uploadProfilePhoto({
+      accessToken: profileToken(),
+      base64: base64,
+      fileName: selectedProfilePhoto.name,
+      mimeType: selectedProfilePhoto.type,
+      size: selectedProfilePhoto.size
+    });
+  };
+  reader.readAsDataURL(selectedProfilePhoto);
+}
+
+function titleOfFile_(f){ return f.final_name || f.suggested_name || f.original_name || 'Material'; }
+function renderMaterials(rows) {
+  var box = document.getElementById('myMaterials');
+  if (!rows.length) { box.innerHTML = '<p style="color:var(--text-muted);font-size:14px">Nenhum material enviado ainda.</p>'; return; }
+  box.innerHTML = rows.map(function(f){
+    return '<article class="file-card" onclick="navigate(\'detalhe\',{id:\'' + escHtml(f.id) + '\'})">' +
+      '<div class="file-card-title">' + escHtml(titleOfFile_(f)) + '</div>' +
+      '<div class="file-card-badges">' + fileTypeBadge(f.file_type) + statusBadge(f.status) + '</div>' +
+      '<div class="file-card-subtitle">Enviado em ' + escHtml(fmtDate(f.created_at)) + '</div>' +
+      '</article>';
+  }).join('');
+}
+function renderPaths(rows) {
+  var box = document.getElementById('myPaths');
+  if (!rows.length) { box.innerHTML = '<p style="color:var(--text-muted);font-size:14px">Nenhuma trilha criada por você.</p>'; return; }
+  box.innerHTML = rows.map(function(p){
+    return '<article class="file-card" onclick="navigate(\'trilha-detalhe\',{pathId:\'' + escHtml(p.id) + '\'})">' +
+      '<div class="file-card-title">' + escHtml(p.title || 'Trilha') + '</div>' +
+      '<div class="file-card-subtitle">' + escHtml(p.visibility || 'public') + ' · ' + escHtml(fmtDate(p.created_at)) + '</div>' +
+      '</article>';
+  }).join('');
+}
+function renderProgress(rows) {
+  var box = document.getElementById('myProgress');
+  if (!rows.length) { box.innerHTML = '<p style="color:var(--text-muted);font-size:14px">Sem progresso registrado ainda.</p>'; return; }
+  var label = { not_started:'Não iniciado', reading:'Lendo', completed:'Concluído', review_later:'Revisar depois' };
+  box.innerHTML = rows.map(function(p){
+    var f = p.study_files || {};
+    return '<article style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:12px">' +
+      '<b style="display:block;color:var(--text-primary);margin-bottom:4px">' + escHtml(titleOfFile_(f)) + '</b>' +
+      '<span class="badge badge-secondary">' + escHtml(label[p.status] || p.status || '-') + '</span>' +
+      '</article>';
+  }).join('');
+}
+function renderHistory(rows) {
+  var box = document.getElementById('myHistory');
+  if (!rows.length) { box.innerHTML = ''; return; }
+  box.innerHTML = rows.map(function(h){
+    var f = h.study_files || {};
+    return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px;font-size:13px;color:#434655">' +
+      '<b>' + escHtml(h.action || 'ação') + '</b> · ' + escHtml(titleOfFile_(f)) + ' · ' + escHtml(fmtDate(h.created_at)) +
+      '</div>';
+  }).join('');
+}
+</script>
+</body>
+</html>

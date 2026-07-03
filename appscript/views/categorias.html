@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?></head>
+<body class="bg-background">
+
+<?!= include('partials/sidebar'); ?>
+<div class="main-content">
+  <?!= include('partials/topbar'); ?>
+
+  <main class="page-content">
+    <div class="page-header">
+      <h2>Taxonomia & Dicionário</h2>
+      <p>Gerencie categorias, assuntos, ciclos e termos do dicionário de normalização.</p>
+    </div>
+
+    <!-- Abas -->
+    <div class="taxonomy-tabs no-scrollbar" style="display:flex;gap:4px;background:var(--surface-low);border-radius:12px;padding:4px;margin-bottom:24px;overflow-x:auto">
+      <? var tabs=[['cats','Categorias','category'],['subs','Assuntos','topic'],['cycles','Ciclos','layers'],['dict','Dicionário','dictionary'],['tags','Tags','sell']]; ?>
+      <? for(var i=0;i<tabs.length;i++){var t=tabs[i]; ?>
+      <button id="tab_<?=t[0]?>" onclick="switchTab('<?=t[0]?>')"
+        style="flex:1;min-width:fit-content;padding:8px 14px;border:none;border-radius:10px;font-size:13px;font-weight:600;
+               cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;
+               background:<?=i===0?'#fff':'transparent'?>;color:<?=i===0?'#191c1e':'#737686'?>;
+               box-shadow:<?=i===0?'0 1px 4px rgba(0,0,0,.08)':'none'?>">
+        <span class="material-symbols-outlined" style="font-size:17px"><?=t[2]?></span><?=t[1]?>
+      </button>
+      <? } ?>
+    </div>
+
+    <!-- CATEGORIAS -->
+    <div id="panel_cats">
+      <div class="section-header">
+        <h3>Categorias</h3>
+        <button class="btn-primary" onclick="openCatModal()" style="border-radius:100px;padding:7px 18px;font-size:13px">
+          <span class="material-symbols-outlined" style="font-size:16px">add</span> Nova
+        </button>
+      </div>
+      <div id="catGrid" class="bento-grid"></div>
+    </div>
+
+    <!-- ASSUNTOS -->
+    <div id="panel_subs" style="display:none">
+      <div class="section-header">
+        <h3>Assuntos</h3>
+        <button class="btn-primary" onclick="openSubModal()" style="border-radius:100px;padding:7px 18px;font-size:13px">
+          <span class="material-symbols-outlined" style="font-size:16px">add</span> Novo
+        </button>
+      </div>
+      <div style="margin-bottom:14px">
+        <select id="filterCatForSub" onchange="loadSubjects()" style="border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;color:var(--text-primary);outline:none;background:var(--surface);min-width:240px">
+          <option value="">Todas as categorias</option>
+        </select>
+      </div>
+      <div id="subsList" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+
+    <!-- CICLOS -->
+    <div id="panel_cycles" style="display:none">
+      <div class="section-header">
+        <h3>Ciclos de Estudo</h3>
+        <button class="btn-primary" onclick="openCycleModal()" style="border-radius:100px;padding:7px 18px;font-size:13px">
+          <span class="material-symbols-outlined" style="font-size:16px">add</span> Novo
+        </button>
+      </div>
+      <div id="cyclesList" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+
+    <!-- DICIONÁRIO -->
+    <div id="panel_dict" style="display:none">
+      <div class="section-header">
+        <h3>Termos do Dicionário</h3>
+        <button class="btn-primary" onclick="openDictModal()" style="border-radius:100px;padding:7px 18px;font-size:13px">
+          <span class="material-symbols-outlined" style="font-size:16px">add</span> Novo
+        </button>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead style="background:#f2f4f6">
+            <tr>
+              <? ['Termo bruto','Normalizado','Categoria','Tipo','Peso',''].forEach(function(h){ ?>
+              <th style="text-align:left;padding:10px 14px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid #c3c6d7"><?=h?></th>
+              <? }); ?>
+            </tr>
+          </thead>
+          <tbody id="dictTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAGS -->
+    <div id="panel_tags" style="display:none">
+      <div class="section-header"><h3>Tags</h3></div>
+      <div id="tagsPanel" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    </div>
+
+    <div class="safe-bottom-pad"></div>
+  </main>
+</div>
+
+<!-- Modal Categoria -->
+<div id="modalCat" class="modal-backdrop" style="display:none">
+  <div class="modal-box">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <h3 id="catModalTitle" style="font-size:16px;font-weight:700;margin:0">Nova Categoria</h3>
+      <button onclick="closeModal('modalCat')" class="btn-secondary" style="border:none;padding:4px">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">
+      <input type="hidden" id="catId">
+      <div class="filter-select"><label>Nome</label>
+        <input id="catName" type="text" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;color:var(--text-primary);outline:none;background:var(--input-bg)">
+      </div>
+      <div class="filter-select"><label>Descrição</label>
+        <textarea id="catDesc" rows="2" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;color:var(--text-primary);outline:none;background:var(--surface);resize:none"></textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="filter-select"><label>Cor</label>
+          <input id="catColor" type="color" value="#004ac6" style="width:100%;height:38px;border:1px solid var(--border);border-radius:8px;cursor:pointer;padding:2px">
+        </div>
+        <div class="filter-select"><label>Ícone (Material)</label>
+          <input id="catIcon" type="text" placeholder="Ex: category" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;color:var(--text-primary);outline:none;background:var(--input-bg)">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:4px">
+        <button onclick="closeModal('modalCat')" class="btn-secondary" style="flex:1;padding:11px;border-radius:10px">Cancelar</button>
+        <button onclick="saveCat()" id="saveCatBtn" class="btn-primary" style="flex:1;padding:11px;border-radius:10px">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Assunto -->
+<div id="modalSub" class="modal-backdrop" style="display:none">
+  <div class="modal-box">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <h3 style="font-size:16px;font-weight:700;margin:0">Assunto</h3>
+      <button onclick="closeModal('modalSub')" class="btn-secondary" style="border:none;padding:4px"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">
+      <input type="hidden" id="subId">
+      <div class="filter-select"><label>Nome</label>
+        <input id="subName" type="text" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;color:var(--text-primary);outline:none;background:var(--input-bg)">
+      </div>
+      <div class="filter-select"><label>Categoria</label>
+        <select id="subCatId" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;color:var(--text-primary);outline:none;background:var(--input-bg)">
+          <option value="">Nenhuma</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:4px">
+        <button onclick="closeModal('modalSub')" class="btn-secondary" style="flex:1;padding:11px;border-radius:10px">Cancelar</button>
+        <button onclick="saveSub()" id="saveSubBtn" class="btn-primary" style="flex:1;padding:11px;border-radius:10px">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Ciclo -->
+<div id="modalCycle" class="modal-backdrop" style="display:none">
+  <div class="modal-box">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <h3 style="font-size:16px;font-weight:700;margin:0">Ciclo</h3>
+      <button onclick="closeModal('modalCycle')" class="btn-secondary" style="border:none;padding:4px"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">
+      <input type="hidden" id="cycleId">
+      <div class="filter-select"><label>Nome</label>
+        <input id="cycleName" type="text" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;color:var(--text-primary);outline:none;background:var(--input-bg)">
+      </div>
+      <div class="filter-select"><label>Assunto</label>
+        <select id="cycleSubId" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;color:var(--text-primary);outline:none;background:var(--input-bg)">
+          <option value="">Nenhum</option>
+        </select>
+      </div>
+      <div class="filter-select"><label>Ordem</label>
+        <input id="cycleOrder" type="number" value="0" min="0" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;color:var(--text-primary);outline:none;background:var(--input-bg)">
+      </div>
+      <div style="display:flex;gap:10px;margin-top:4px">
+        <button onclick="closeModal('modalCycle')" class="btn-secondary" style="flex:1;padding:11px;border-radius:10px">Cancelar</button>
+        <button onclick="saveCycle()" id="saveCycleBtn" class="btn-primary" style="flex:1;padding:11px;border-radius:10px">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Dicionário -->
+<div id="modalDict" class="modal-backdrop" style="display:none">
+  <div class="modal-box" style="max-width:540px">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <h3 style="font-size:16px;font-weight:700;margin:0">Termo do Dicionário</h3>
+      <button onclick="closeModal('modalDict')" class="btn-secondary" style="border:none;padding:4px"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">
+      <input type="hidden" id="dictId">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="filter-select"><label>Termo bruto</label>
+          <input id="dictRaw" type="text" placeholder="ex: tcc" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;color:var(--text-primary);outline:none;background:var(--input-bg)">
+        </div>
+        <div class="filter-select"><label>Normalizado</label>
+          <input id="dictNorm" type="text" placeholder="ex: Trabalho de Conclusão" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;color:var(--text-primary);outline:none;background:var(--input-bg)">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="filter-select"><label>Categoria (hint)</label>
+          <input id="dictCatHint" type="text" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;color:var(--text-primary);outline:none;background:var(--input-bg)">
+        </div>
+        <div class="filter-select"><label>Tipo de arquivo</label>
+          <select id="dictTypeHint" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;color:var(--text-primary);outline:none;background:var(--input-bg)">
+            <option value="">Auto</option>
+            <option value="book">Livro</option>
+            <option value="article">Artigo</option>
+            <option value="slide">Slide</option>
+            <option value="summary">Resumo</option>
+            <option value="test">Prova</option>
+            <option value="notes">Apostila</option>
+            <option value="document">Documento</option>
+            <option value="dataset">Dataset</option>
+          </select>
+        </div>
+      </div>
+      <div class="filter-select"><label>Peso (1–10)</label>
+        <input id="dictWeight" type="number" value="5" min="1" max="10" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;color:var(--text-primary);outline:none;background:var(--input-bg)">
+      </div>
+      <div style="display:flex;gap:10px;margin-top:4px">
+        <button onclick="closeModal('modalDict')" class="btn-secondary" style="flex:1;padding:11px;border-radius:10px">Cancelar</button>
+        <button onclick="saveDict()" id="saveDictBtn" class="btn-primary" style="flex:1;padding:11px;border-radius:10px">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<?!= include('partials/bottomnav'); ?>
+<?!= include('scripts/app'); ?>
+
+<script>
+var CATS = [], SUBS = [];
+
+onDomReady(function() {
+  loadCats();
+});
+
+// ---- TABS
+function switchTab(id) {
+  ['cats','subs','cycles','dict','tags'].forEach(function(t) {
+    document.getElementById('panel_'+t).style.display = t===id ? 'block' : 'none';
+    var btn = document.getElementById('tab_'+t);
+    if (btn) {
+      btn.style.background   = t===id ? '#fff'       : 'transparent';
+      btn.style.color        = t===id ? '#191c1e'    : '#737686';
+      btn.style.boxShadow    = t===id ? '0 1px 4px rgba(0,0,0,.08)' : 'none';
+    }
+  });
+  if (id==='subs')   loadSubjects();
+  if (id==='cycles') loadCycles();
+  if (id==='dict')   loadDict();
+  if (id==='tags')   loadTagsPanel();
+}
+
+// ---- CATEGORIAS
+function loadCats() {
+  google.script.run.withSuccessHandler(function(res) {
+    if (!res||!res.ok) return;
+    CATS = res.categories || [];
+    populateCatSelects();
+    var grid = document.getElementById('catGrid');
+    if (!CATS.length) { grid.innerHTML='<div class="empty-state"><span class="material-symbols-outlined">category</span><p>Nenhuma categoria</p></div>'; return; }
+    grid.innerHTML = CATS.map(function(cat) {
+      var countBadge = cat.material_count!=null
+        ? '<span class="folder-count-badge">'+cat.material_count+' materiais</span>'
+        : '';
+      var safeColor = /^#[0-9a-fA-F]{3,8}$/.test(String(cat.color || '')) ? cat.color : '#004ac6';
+      var safeIcon = escHtml(cat.icon || 'category');
+      var safeId = escHtml(cat.id || '');
+      return '<div class="folder-card js-cat-open" data-cat-id="'+safeId+'" role="button" tabindex="0">' +
+        '<div class="folder-card-top">' +
+          '<div class="folder-icon" style="background:'+safeColor+'22">' +
+            '<span class="material-symbols-outlined icon-fill" style="font-size:26px;color:'+safeColor+'">'+safeIcon+'</span>' +
+          '</div>' +
+          '<div style="display:flex;align-items:flex-start;gap:6px">' +
+            countBadge +
+            '<div style="display:flex;gap:4px;flex-shrink:0">' +
+              '<button type="button" data-cat-edit="'+safeId+'" class="btn-secondary" style="padding:5px 9px;border-radius:var(--radius-sm);font-size:12px" title="Editar"><span class="material-symbols-outlined" style="font-size:16px">edit</span></button>' +
+              '<button type="button" data-cat-delete="'+safeId+'" class="btn-danger" style="padding:5px 9px;border-radius:var(--radius-sm);font-size:12px" title="Excluir"><span class="material-symbols-outlined" style="font-size:16px">delete</span></button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="folder-card-body">' +
+          '<div class="folder-card-title">'+escHtml(cat.name)+'</div>' +
+          '<div class="folder-card-desc">'+escHtml(cat.description||'')+'</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    bindCategoryCardEvents();
+  }).listCategories();
+}
+
+
+function bindCategoryCardEvents() {
+  document.querySelectorAll('.js-cat-open').forEach(function(card) {
+    card.onclick = function() {
+      navigate('biblioteca', { filterType: 'category', filterId: card.getAttribute('data-cat-id') || '' });
+    };
+    card.onkeydown = function(ev) {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        navigate('biblioteca', { filterType: 'category', filterId: card.getAttribute('data-cat-id') || '' });
+      }
+    };
+  });
+  document.querySelectorAll('[data-cat-edit]').forEach(function(btn) {
+    btn.onclick = function(ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      editCat(btn.getAttribute('data-cat-edit') || '');
+    };
+  });
+  document.querySelectorAll('[data-cat-delete]').forEach(function(btn) {
+    btn.onclick = function(ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      deleteCat(btn.getAttribute('data-cat-delete') || '');
+    };
+  });
+}
+
+function openCatModal(cat) {
+  document.getElementById('catModalTitle').textContent = cat ? 'Editar Categoria' : 'Nova Categoria';
+  document.getElementById('catId').value    = cat ? cat.id    : '';
+  document.getElementById('catName').value  = cat ? cat.name  : '';
+  document.getElementById('catDesc').value  = cat ? (cat.description||'') : '';
+  document.getElementById('catColor').value = cat ? (cat.color||'#004ac6') : '#004ac6';
+  document.getElementById('catIcon').value  = cat ? (cat.icon ||'category') : 'category';
+  openModal('modalCat');
+}
+function editCat(id) { openCatModal(CATS.find(function(c){return c.id===id;})); }
+
+function saveCat() {
+  var id   = document.getElementById('catId').value;
+  var data = { name:document.getElementById('catName').value.trim(), description:document.getElementById('catDesc').value.trim(), color:document.getElementById('catColor').value, icon:document.getElementById('catIcon').value.trim()||'category' };
+  var btn  = document.getElementById('saveCatBtn');
+  setBtnLoading(btn,true,'Salvando…');
+  var fn = id ? function(cb){ google.script.run.withSuccessHandler(cb).updateCategory(id,data); } : function(cb){ google.script.run.withSuccessHandler(cb).createCategory(data); };
+  fn(function(res){
+    setBtnLoading(btn,false);
+    if(res&&res.ok){showToast('Salvo!','success');closeModal('modalCat');loadCats();}
+    else showToast((res&&res.error)||'Erro','error');
+  });
+}
+
+function deleteCat(id) {
+  if (!confirm('Excluir categoria? Os arquivos associados serão desvinculados.')) return;
+  google.script.run.withSuccessHandler(function(){ showToast('Excluída.','default'); loadCats(); }).deleteCategory(id);
+}
+
+// ---- ASSUNTOS
+function populateCatSelects() {
+  var opts = '<option value="">Nenhuma</option>' + CATS.map(function(c){return '<option value="'+c.id+'">'+escHtml(c.name)+'</option>';}).join('');
+  ['filterCatForSub','subCatId'].forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML=(id==='filterCatForSub'?'<option value="">Todas as categorias</option>':'')+CATS.map(function(c){return '<option value="'+c.id+'">'+escHtml(c.name)+'</option>';}).join('');});
+}
+
+function loadSubjects() {
+  var catId = document.getElementById('filterCatForSub').value;
+  google.script.run.withSuccessHandler(function(res) {
+    SUBS = res.subjects||[];
+    populateSubSelects();
+    var list = document.getElementById('subsList');
+    if(!SUBS.length){list.innerHTML='<div class="empty-state"><span class="material-symbols-outlined">topic</span><p>Nenhum assunto</p></div>';return;}
+    list.innerHTML = SUBS.map(function(s){
+      return '<div class="taxonomy-list-row" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px">' +
+        '<span class="material-symbols-outlined" style="color:#004ac6">topic</span>' +
+        '<div style="flex:1"><div style="font-size:14px;font-weight:600;color:#191c1e">'+escHtml(s.name)+'</div>' +
+        (s.categories?'<div style="font-size:12px;color:#737686">'+escHtml(s.categories.name)+'</div>':'')+'</div>' +
+        '<button onclick="editSub(\''+s.id+'\')" class="btn-secondary taxonomy-icon-btn" style="padding:4px 8px;border-radius:8px;font-size:12px"><span class="material-symbols-outlined" style="font-size:16px">edit</span></button>' +
+        '<button onclick="deleteSub(\''+s.id+'\')" class="btn-danger taxonomy-icon-btn" style="padding:4px 8px;border-radius:8px;font-size:12px"><span class="material-symbols-outlined" style="font-size:16px">delete</span></button>' +
+        '</div>';
+    }).join('');
+  }).listSubjects(catId||null);
+}
+
+function openSubModal(sub) {
+  document.getElementById('subId').value   = sub?sub.id:'';
+  document.getElementById('subName').value = sub?sub.name:'';
+  document.getElementById('subCatId').value = sub?(sub.category_id||''):'';
+  openModal('modalSub');
+}
+function editSub(id){ openSubModal(SUBS.find(function(s){return s.id===id;})); }
+function deleteSub(id){ if(!confirm('Excluir assunto?'))return; google.script.run.withSuccessHandler(function(){showToast('Excluído.','default');loadSubjects();}).deleteSubject(id); }
+
+function saveSub() {
+  var id   = document.getElementById('subId').value;
+  var data = { name:document.getElementById('subName').value.trim(), category_id:document.getElementById('subCatId').value||null };
+  var btn  = document.getElementById('saveSubBtn');
+  setBtnLoading(btn,true,'Salvando…');
+  var fn = id ? function(cb){google.script.run.withSuccessHandler(cb).updateSubject(id,data);} : function(cb){google.script.run.withSuccessHandler(cb).createSubject(data);};
+  fn(function(res){ setBtnLoading(btn,false); if(res&&res.ok){showToast('Salvo!','success');closeModal('modalSub');loadSubjects();}else showToast('Erro','error'); });
+}
+
+// ---- CICLOS
+function populateSubSelects() {
+  var opts = '<option value="">Nenhum</option>'+SUBS.map(function(s){return '<option value="'+s.id+'">'+escHtml(s.name)+'</option>';}).join('');
+  var el = document.getElementById('cycleSubId'); if(el) el.innerHTML = opts;
+}
+
+function loadCycles() {
+  google.script.run.withSuccessHandler(function(res) {
+    var list = document.getElementById('cyclesList');
+    var cycles = res.cycles||[];
+    if(!cycles.length){list.innerHTML='<div class="empty-state"><span class="material-symbols-outlined">layers</span><p>Nenhum ciclo</p></div>';return;}
+    list.innerHTML = cycles.map(function(c){
+      return '<div class="taxonomy-list-row" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px">' +
+        '<div style="width:32px;height:32px;background:#dbe1ff;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+        '<span style="font-size:13px;font-weight:700;color:#004ac6">'+c.order_index+'</span></div>' +
+        '<div style="flex:1"><div style="font-size:14px;font-weight:600;color:#191c1e">'+escHtml(c.name)+'</div>' +
+        (c.subjects?'<div style="font-size:12px;color:#737686">'+escHtml(c.subjects.name)+'</div>':'')+'</div>' +
+        '<button onclick="deleteCycle_(\''+c.id+'\')" class="btn-danger taxonomy-icon-btn" style="padding:4px 8px;border-radius:8px;font-size:12px"><span class="material-symbols-outlined" style="font-size:16px">delete</span></button>' +
+        '</div>';
+    }).join('');
+  }).listCycles(null);
+}
+
+function openCycleModal(){
+  document.getElementById('cycleId').value=''; document.getElementById('cycleName').value='';
+  document.getElementById('cycleOrder').value='0';
+  if(!SUBS.length) loadSubjects();
+  openModal('modalCycle');
+}
+function deleteCycle_(id){ if(!confirm('Excluir ciclo?'))return; google.script.run.withSuccessHandler(function(){showToast('Excluído.','default');loadCycles();}).deleteCycle(id); }
+
+function saveCycle() {
+  var data = { name:document.getElementById('cycleName').value.trim(), subject_id:document.getElementById('cycleSubId').value||null, order_index:document.getElementById('cycleOrder').value };
+  var btn  = document.getElementById('saveCycleBtn');
+  setBtnLoading(btn,true,'Salvando…');
+  google.script.run.withSuccessHandler(function(res){ setBtnLoading(btn,false); if(res&&res.ok){showToast('Salvo!','success');closeModal('modalCycle');loadCycles();}else showToast('Erro','error'); }).createCycle(data);
+}
+
+// ---- DICIONÁRIO
+function loadDict() {
+  google.script.run.withSuccessHandler(function(res) {
+    var tbody = document.getElementById('dictTable');
+    var terms = (res&&res.terms)||[];
+    if(!terms.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:32px;color:#737686">Nenhum termo</td></tr>';return;}
+    tbody.innerHTML = terms.map(function(t) {
+      return '<tr style="border-bottom:1px solid #f2f4f6;transition:background .15s" onmouseover="this.style.background=\'#f2f4f6\'" onmouseout="this.style.background=\'\'">' +
+        '<td style="padding:10px 14px;font-size:13px;font-weight:600;color:#191c1e">'+escHtml(t.raw_term)+'</td>' +
+        '<td style="padding:10px 14px;font-size:13px;color:#434655">'+escHtml(t.normalized_term||'—')+'</td>' +
+        '<td style="padding:10px 14px"><span class="badge badge-secondary">'+escHtml(t.category_hint||'—')+'</span></td>' +
+        '<td style="padding:10px 14px">'+fileTypeBadge(t.file_type_hint||'other')+'</td>' +
+        '<td style="padding:10px 14px;font-size:13px;font-weight:700;color:#004ac6">'+t.weight+'</td>' +
+        '<td style="padding:10px 14px"><div style="display:flex;gap:6px">' +
+        '<button onclick="editDict('+JSON.stringify(t).replace(/"/g,'&quot;')+')" class="btn-secondary taxonomy-icon-btn" style="padding:4px 8px;border-radius:8px;font-size:12px"><span class="material-symbols-outlined" style="font-size:14px">edit</span></button>' +
+        '<button onclick="deleteDict(\''+t.id+'\')" class="btn-danger taxonomy-icon-btn" style="padding:4px 8px;border-radius:8px;font-size:12px"><span class="material-symbols-outlined" style="font-size:14px">delete</span></button>' +
+        '</div></td></tr>';
+    }).join('');
+  }).listDictionaryTerms();
+}
+
+function openDictModal(){ document.getElementById('dictId').value='';document.getElementById('dictRaw').value='';document.getElementById('dictNorm').value='';document.getElementById('dictCatHint').value='';document.getElementById('dictTypeHint').value='';document.getElementById('dictWeight').value='5'; openModal('modalDict'); }
+
+function editDict(t) {
+  document.getElementById('dictId').value       = t.id;
+  document.getElementById('dictRaw').value      = t.raw_term;
+  document.getElementById('dictNorm').value     = t.normalized_term||'';
+  document.getElementById('dictCatHint').value  = t.category_hint||'';
+  document.getElementById('dictTypeHint').value = t.file_type_hint||'';
+  document.getElementById('dictWeight').value   = t.weight||5;
+  openModal('modalDict');
+}
+
+function saveDict() {
+  var data = { id:document.getElementById('dictId').value||null, raw_term:document.getElementById('dictRaw').value.trim(), normalized_term:document.getElementById('dictNorm').value.trim(), category_hint:document.getElementById('dictCatHint').value.trim()||null, file_type_hint:document.getElementById('dictTypeHint').value||null, weight:parseInt(document.getElementById('dictWeight').value)||5, active:true };
+  var btn  = document.getElementById('saveDictBtn');
+  setBtnLoading(btn,true,'Salvando…');
+  google.script.run.withSuccessHandler(function(res){ setBtnLoading(btn,false); if(res&&res.ok){showToast('Salvo!','success');closeModal('modalDict');loadDict();}else showToast('Erro','error'); }).saveDictionaryTermFull(data);
+}
+
+function deleteDict(id){ if(!confirm('Excluir termo?'))return; google.script.run.withSuccessHandler(function(){showToast('Excluído.','default');loadDict();}).deleteDictionaryTerm(id); }
+
+// ---- TAGS
+function loadTagsPanel() {
+  google.script.run.withSuccessHandler(function(res) {
+    var el = document.getElementById('tagsPanel');
+    var tags = (res&&res.tags)||[];
+    if(!tags.length){el.innerHTML='<div class="empty-state"><span class="material-symbols-outlined">sell</span><p>Nenhuma tag</p></div>';return;}
+    el.innerHTML = tags.map(function(t){
+      return '<div style="display:flex;align-items:center;gap:4px;background:#dbe1ff;border-radius:100px;padding:4px 12px 4px 14px">' +
+        '<span style="font-size:13px;font-weight:600;color:#003ea8">'+escHtml(t.name)+'</span>' +
+        '<button onclick="deleteTag_(\''+t.id+'\')" style="background:none;border:none;cursor:pointer;padding:0;color:#003ea8;display:flex;align-items:center">' +
+        '<span class="material-symbols-outlined" style="font-size:16px">close</span></button></div>';
+    }).join('');
+  }).listTags();
+}
+
+function deleteTag_(id){ if(!confirm('Excluir tag?'))return; google.script.run.withSuccessHandler(function(){showToast('Tag excluída.','default');loadTagsPanel();}).deleteTag(id); }
+</script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<script>
+// ============================================================
+// dashboard.js — Script específico da view Dashboard
+// Usado dentro de views/dashboard.html via include
+// ============================================================
+
+var DASH = (function() {
+
+  function loadStats(profileId) {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res || !res.ok) return;
+        renderStatCard('statTotal',   res.files.total,   'Total de Arquivos');
+        renderStatCard('statPending', res.files.byStatus.pending   || 0, 'Pendentes');
+        renderStatCard('statReading', res.progress.reading          || 0, 'Em Leitura');
+        renderStatCard('statDone',    res.progress.completed        || 0, 'Concluídos');
+      })
+      .getMyStats(sessionStorage.getItem('RE_ACCESS_TOKEN') || '');
+  }
+
+  function renderStatCard(id, value, label) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = value;
+    var card = el.closest('.stat-card');
+    if (card) {
+      card.style.opacity    = '0';
+      card.style.transform  = 'translateY(8px)';
+      card.style.transition = 'opacity .3s, transform .3s';
+      setTimeout(function() {
+        card.style.opacity   = '1';
+        card.style.transform = 'translateY(0)';
+      }, 80);
+    }
+  }
+
+  function renderQuickActions(appUrl) {
+    var items = [
+      { page:'upload',    icon:'upload_file',  bg:'#dbe1ff', color:'#004ac6', label:'Upload' },
+      { page:'revisao',   icon:'rate_review',  bg:'#fef3c7', color:'#92400e', label:'Revisão IA' },
+      { page:'trilhas',   icon:'route',        bg:'#d1fae5', color:'#065f46', label:'Trilhas' },
+      { page:'historico', icon:'history',      bg:'#ffdbcd', color:'#7d2d00', label:'Histórico' },
+    ];
+    var grid = document.getElementById('quickGrid');
+    if (!grid) return;
+    grid.innerHTML = items.map(function(it) {
+      return '<a href="' + appUrl + '?page=' + it.page + '"' +
+        ' style="background:#fff;border:1px solid #c3c6d7;border-radius:14px;' +
+        'padding:18px 16px;display:flex;align-items:center;gap:12px;text-decoration:none;' +
+        'transition:all .2s;color:#191c1e" class="hover-lift">' +
+        '<div style="width:40px;height:40px;border-radius:10px;background:' + it.bg + ';' +
+        'display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+        '<span class="material-symbols-outlined" style="color:' + it.color + ';font-size:22px">' + it.icon + '</span></div>' +
+        '<span style="font-size:14px;font-weight:600">' + it.label + '</span>' +
+        '</a>';
+    }).join('');
+  }
+
+  function renderActivityFeed(history) {
+    var el = document.getElementById('activityFeed');
+    if (!el) return;
+    if (!history || history.length === 0) {
+      el.innerHTML = '<p style="font-size:13px;color:#737686;text-align:center;padding:16px">Nenhuma atividade recente.</p>';
+      return;
+    }
+    var icons = {
+      file_uploaded: ['cloud_upload','#004ac6','#dbe1ff'],
+      file_approved: ['verified','#065f46','#d1fae5'],
+      file_renamed:  ['drive_file_rename_outline','#7d2d00','#ffdbcd'],
+      progress_updated: ['trending_up','#004ac6','#dbe1ff'],
+    };
+    el.innerHTML = history.slice(0,5).map(function(h) {
+      var meta = icons[h.action] || ['history','#737686','#f2f4f6'];
+      var fname = (h.study_files && (h.study_files.final_name || h.study_files.original_name)) || '—';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;' +
+        'border-bottom:1px solid #f2f4f6">' +
+        '<div style="width:32px;height:32px;border-radius:8px;background:' + meta[2] + ';flex-shrink:0;' +
+        'display:flex;align-items:center;justify-content:center">' +
+        '<span class="material-symbols-outlined" style="font-size:17px;color:' + meta[1] + '">' + meta[0] + '</span></div>' +
+        '<div style="flex:1;min-width:0;overflow:hidden">' +
+        '<div style="font-size:13px;font-weight:500;color:#191c1e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(fname) + '</div>' +
+        '<div style="font-size:11px;color:#737686">' + fmtDate(h.created_at) + '</div>' +
+        '</div></div>';
+    }).join('');
+  }
+
+  return { loadStats, renderQuickActions, renderActivityFeed };
+})();
+</script>

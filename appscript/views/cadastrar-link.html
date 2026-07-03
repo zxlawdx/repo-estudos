@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?></head>
+<body class="bg-background">
+<?!= include('partials/sidebar'); ?>
+<div class="main-content">
+  <?!= include('partials/topbar'); ?>
+  <main class="page-content">
+    <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div>
+        <h2>Cadastrar por link</h2>
+        <p>Adicione vídeo, playlist do YouTube, artigo externo ou referência educacional sem duplicar arquivo no Drive.</p>
+      </div>
+      <button onclick="navigate('upload')" class="btn-secondary" style="border-radius:100px;padding:8px 16px"><span class="material-symbols-outlined" style="font-size:18px">upload_file</span> Upload de arquivo</button>
+    </div>
+
+    <div id="linkError" style="display:none"></div>
+
+    <section style="display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:20px" class="link-form-grid">
+      <div class="settings-card">
+        <h3 style="font-size:17px;font-weight:800;margin:0 0 6px;color:#191c1e">Link do material</h3>
+        <p style="font-size:13px;color:var(--text-muted);margin:0 0 16px">Cole um link do YouTube, playlist, artigo/site ou referência externa. O app salva só metadados no Supabase.</p>
+
+        <div class="filter-select" style="margin-bottom:12px">
+          <label>URL</label>
+          <input id="linkUrl" type="url" inputmode="url" class="form-control" placeholder="https://www.youtube.com/watch?v=..." oninput="debounceLinkPreview()">
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+          <button id="previewLinkBtn" class="btn-secondary" onclick="previewLink()" style="border-radius:100px;padding:9px 18px"><span class="material-symbols-outlined" style="font-size:18px">visibility</span> Pré-visualizar</button>
+          <button id="saveLinkBtn" class="btn-primary" onclick="saveLinkMaterial()" style="border-radius:100px;padding:9px 18px"><span class="material-symbols-outlined" style="font-size:18px">add_link</span> Cadastrar material</button>
+        </div>
+
+        <div id="linkPreview" class="link-preview-panel">
+          <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+            <img id="linkThumb" class="external-link-thumb" style="max-width:220px;display:none" alt="Thumbnail do link">
+            <div style="flex:1;min-width:220px">
+              <div id="linkBadges" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+              <h4 id="linkPreviewTitle" style="font-size:16px;font-weight:800;color:var(--text-primary);margin:0 0 4px">—</h4>
+              <p id="linkPreviewMeta" style="font-size:13px;color:var(--text-muted);margin:0;word-break:break-word"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="settings-card" style="height:fit-content">
+        <h3 style="font-size:16px;font-weight:800;margin:0 0 14px;color:#191c1e">Informações</h3>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="filter-select"><label>Título</label><input id="linkTitle" type="text" class="form-control" placeholder="Será preenchido pela prévia, se possível"></div>
+          <div class="filter-select"><label>Canal/Autor</label><input id="linkAuthor" type="text" class="form-control" placeholder="Canal, site ou autor"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="filter-select"><label>Ano</label><input id="linkYear" type="number" min="1900" max="2099" class="form-control"></div>
+            <div class="filter-select"><label>Tipo</label><select id="linkFileType" class="form-control"><option value="auto">Detectar</option><option value="video">Vídeo</option><option value="playlist">Playlist</option><option value="article">Artigo externo</option><option value="external_link">Link externo</option></select></div>
+          </div>
+          <div class="filter-select"><label>Área do conhecimento</label><select id="linkCategory" class="form-control"><option value="">Selecione…</option></select></div>
+          <div class="filter-select"><label>Visibilidade</label><div style="display:flex;gap:14px;margin-top:4px"><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="linkVis" value="private" checked style="accent-color:#004ac6"> Privado</label><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="linkVis" value="public" style="accent-color:#004ac6"> Público</label></div></div>
+          <p style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:800;margin:0">Embed seguro: YouTube/Drive por whitelist. Sem Supabase Storage.</p>
+        </div>
+      </aside>
+    </section>
+    <div class="safe-bottom-pad"></div>
+  </main>
+</div>
+<?!= include('partials/bottomnav'); ?>
+<?!= include('scripts/app'); ?>
+<script>
+var LINK_META = null;
+var linkTimer = null;
+onDomReady(function(){ loadLinkCategories(); });
+function token(){ return sessionStorage.getItem('RE_ACCESS_TOKEN') || ''; }
+function loadLinkCategories(){ google.script.run.withSuccessHandler(function(res){ if(!res||!res.ok)return; var sel=document.getElementById('linkCategory'); (res.categories||[]).forEach(function(c){sel.innerHTML+='<option value="'+c.id+'">'+escHtml(c.name)+'</option>';}); }).getCategories(); }
+function showLinkError(title, action, message, stack){ var el=document.getElementById('linkError'); el.style.display='block'; el.innerHTML='<div class="settings-card" style="border-color:#ffb4ab;background:#fff7f6"><div class="badge badge-rejected" style="margin-bottom:10px">ERRO VISÍVEL</div><h2 style="color:#ba1a1a;font-size:22px;margin:0 0 8px">'+escHtml(title)+'</h2><p><b>Ação:</b> '+escHtml(action||'-')+'</p><p><b>Mensagem:</b> '+escHtml(message||'-')+'</p><pre style="white-space:pre-wrap;background:#111;color:#fff;padding:14px;border-radius:12px;overflow:auto;max-height:220px">'+escHtml(stack||message||'')+'</pre><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px"><button class="btn-secondary" onclick="navigate(\'biblioteca\')">Voltar para biblioteca</button><button class="btn-primary" onclick="previewLink()">Tentar novamente</button></div></div>'; }
+function debounceLinkPreview(){ clearTimeout(linkTimer); linkTimer=setTimeout(function(){ var url=document.getElementById('linkUrl').value.trim(); if(url.length>12) previewLink(true); },600); }
+function previewLink(silent){ var url=document.getElementById('linkUrl').value.trim(); if(!url){ if(!silent) showToast('Cole uma URL primeiro.','error'); return; } var btn=document.getElementById('previewLinkBtn'); if(!silent) setBtnLoading(btn,true,'Analisando…'); google.script.run.withSuccessHandler(function(res){ if(!silent) setBtnLoading(btn,false); if(!res||!res.ok){ if(!silent) showLinkError('Erro ao analisar link','getExternalMaterialMetadata',res&&res.error||'URL inválida',res&&res.stack); return; } LINK_META=res; renderLinkPreview(res); }).withFailureHandler(function(e){ if(!silent) setBtnLoading(btn,false); showLinkError('Erro no servidor','getExternalMaterialMetadata',(e&&e.message)||String(e),e&&e.stack); }).getExternalMaterialMetadata(url); }
+function renderLinkPreview(meta){ document.getElementById('linkError').style.display='none'; var panel=document.getElementById('linkPreview'); panel.classList.add('active'); var thumb=document.getElementById('linkThumb'); if(meta.thumbnailUrl){thumb.src=meta.thumbnailUrl;thumb.style.display='block';} else {thumb.removeAttribute('src');thumb.style.display='none';} document.getElementById('linkBadges').innerHTML=fileTypeBadge(meta.sourceType==='youtube_video'?'video':meta.sourceType==='youtube_playlist'?'playlist':'external_link')+'<span class="badge badge-secondary">'+escHtml(meta.provider||'external')+'</span>'; document.getElementById('linkPreviewTitle').textContent=meta.title||'Link externo'; document.getElementById('linkPreviewMeta').textContent=(meta.channelTitle?meta.channelTitle+' · ':'')+(meta.externalUrl||''); if(!document.getElementById('linkTitle').value.trim()) document.getElementById('linkTitle').value=meta.title||''; if(!document.getElementById('linkAuthor').value.trim()) document.getElementById('linkAuthor').value=meta.channelTitle||''; if(document.getElementById('linkFileType').value==='auto'){ if(meta.sourceType==='youtube_video') document.getElementById('linkFileType').value='video'; else if(meta.sourceType==='youtube_playlist') document.getElementById('linkFileType').value='playlist'; } }
+function saveLinkMaterial(){ var url=document.getElementById('linkUrl').value.trim(); if(!url){showToast('Cole uma URL.','error');return;} var access=token(); if(!access){showToast('Sessão expirada. Faça login novamente.','error');return;} var vis=document.querySelector('input[name="linkVis"]:checked'); var btn=document.getElementById('saveLinkBtn'); setBtnLoading(btn,true,'Salvando…'); google.script.run.withSuccessHandler(function(res){ setBtnLoading(btn,false); if(res&&res.ok){showToast('Link cadastrado como material.','success'); clearPageCache(); navigate('detalhe',{id:res.fileId});} else showLinkError('Erro ao cadastrar link','createMaterialFromLink',(res&&res.error)||'Erro desconhecido.',res&&res.stack); }).withFailureHandler(function(e){ setBtnLoading(btn,false); showLinkError('Erro no servidor','createMaterialFromLink',(e&&e.message)||String(e),e&&e.stack); }).createMaterialFromLink({accessToken:access,url:url,title:document.getElementById('linkTitle').value.trim(),author:document.getElementById('linkAuthor').value.trim(),year:parseInt(document.getElementById('linkYear').value,10)||null,fileType:document.getElementById('linkFileType').value==='auto'?null:document.getElementById('linkFileType').value,categoryId:document.getElementById('linkCategory').value||null,visibility:vis?vis.value:'private'}); }
+</script>
+</body>
+</html>

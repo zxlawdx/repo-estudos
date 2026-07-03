@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?></head>
+<body style="margin:0;padding:0;overflow:hidden;height:100dvh;background:#111;touch-action:none">
+
+<!-- ══════════════════════════════════════════════════════════
+     LEITOR — estilo ReadEra
+     • PDF.js renderiza em canvas
+     • UI some em 3s, reaparece ao tocar
+     • Swipe/tap lateral = virar página
+     • Tap central = mostrar/esconder UI
+     • Botões ← → grandes e fixos nas laterais
+══════════════════════════════════════════════════════════ -->
+
+<!-- ── Topbar (some/aparece) ── -->
+<div id="rTopbar" class="r-topbar r-ui">
+  <button class="r-icon-btn" onclick="goBackFromReader()" aria-label="Voltar">
+    <span class="material-symbols-outlined">arrow_back</span>
+  </button>
+  <div id="rTitle" class="r-title">Carregando…</div>
+  <div style="display:flex;gap:4px;align-items:center">
+    <button class="r-icon-btn" id="rBtnBook" onclick="toggleBookMode()" title="Modo livro" style="display:none">
+      <span class="material-symbols-outlined" id="rBookIcon">menu_book</span>
+    </button>
+    <button class="r-icon-btn" onclick="readerZoom(0.15)" title="Zoom +">
+      <span class="material-symbols-outlined">zoom_in</span>
+    </button>
+    <button class="r-icon-btn" onclick="readerZoom(-0.15)" title="Zoom -">
+      <span class="material-symbols-outlined">zoom_out</span>
+    </button>
+    <button class="r-icon-btn" onclick="readerFit()" title="Ajustar">
+      <span class="material-symbols-outlined">fit_screen</span>
+    </button>
+    <button class="r-icon-btn" onclick="toggleFullscreen()" title="Tela cheia">
+      <span class="material-symbols-outlined">fullscreen</span>
+    </button>
+  </div>
+</div>
+
+<!-- ── Área principal ── -->
+<div id="rStage" class="r-stage">
+
+  <!-- Skeleton -->
+  <div id="rSkeleton" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%">
+    <div style="text-align:center;color:#888">
+      <div style="width:56px;height:56px;border:3px solid #333;border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 16px"></div>
+      <div style="font-size:14px">Carregando…</div>
+    </div>
+  </div>
+
+  <!-- Canvas do PDF -->
+  <div id="rBook" class="r-book" style="display:none">
+    <canvas id="rCanvasL"></canvas>
+    <canvas id="rCanvasR" style="display:none"></canvas>
+  </div>
+
+  <!-- Fallback iframe -->
+  <div id="rFallback" style="display:none;width:100%;height:100%"></div>
+
+  <!-- Erro -->
+  <div id="rError" style="display:none;padding:32px;max-width:540px;margin:auto;text-align:center;color:#fff">
+    <span class="material-symbols-outlined" style="font-size:48px;opacity:.5;display:block;margin-bottom:12px">error</span>
+    <div id="rErrorMsg" style="font-size:15px;line-height:1.5;margin-bottom:20px"></div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button onclick="loadReaderData()" class="r-action-btn">Tentar novamente</button>
+      <a id="rErrorDriveLink" href="#" target="_blank" class="r-action-btn" style="display:none;text-decoration:none">Abrir no Drive</a>
+      <button onclick="goBackFromReader()" class="r-action-btn r-action-btn-ghost">Voltar</button>
+    </div>
+  </div>
+
+  <!-- ── Botões de página — sempre visíveis, nas laterais ── -->
+  <button id="rBtnPrev" class="r-page-btn r-page-btn-left" onclick="prevPage()" aria-label="Página anterior">
+    <span class="material-symbols-outlined">chevron_left</span>
+  </button>
+  <button id="rBtnNext" class="r-page-btn r-page-btn-right" onclick="nextPage()" aria-label="Próxima página">
+    <span class="material-symbols-outlined">chevron_right</span>
+  </button>
+
+</div>
+
+<!-- ── Bottom bar (some/aparece) ── -->
+<div id="rBottom" class="r-bottom r-ui">
+
+  <!-- Linha 1: progresso e ações -->
+  <div class="r-bottom-row">
+    <button class="r-action-btn r-action-btn-sm" onclick="completeReader()">
+      <span class="material-symbols-outlined" style="font-size:16px">check_circle</span> Concluído
+    </button>
+    <button class="r-action-btn r-action-btn-sm r-action-btn-ghost" onclick="reviewReaderLater()">
+      <span class="material-symbols-outlined" style="font-size:16px">bookmark</span>
+    </button>
+    <a id="rDriveLink" href="#" target="_blank" class="r-action-btn r-action-btn-sm r-action-btn-ghost"
+      style="display:none;text-decoration:none">
+      <span class="material-symbols-outlined" style="font-size:16px">open_in_new</span>
+    </a>
+  </div>
+
+  <!-- Linha 2: barra de progresso clicável -->
+  <div class="r-progress-wrap" id="rProgressWrap">
+    <div class="r-progress-track" id="rProgressTrack" onclick="seekByClick(event)">
+      <div class="r-progress-fill" id="rProgressFill"></div>
+      <div class="r-progress-thumb" id="rProgressThumb"></div>
+    </div>
+    <div class="r-page-counter">
+      <button class="r-page-dec" onclick="prevPage()" aria-label="Anterior">‹</button>
+      <input id="rPageInput" type="number" min="1" value="1"
+        onkeydown="if(event.key==='Enter'){goToInput();event.target.blur()}"
+        onblur="goToInput()" aria-label="Número da página">
+      <span id="rTotalLabel" style="opacity:.7">/ 1</span>
+      <button class="r-page-inc" onclick="nextPage()" aria-label="Próxima">›</button>
+    </div>
+  </div>
+
+</div>
+
+<?!= include('scripts/app'); ?>
+
+<style>
+@keyframes spin { to { transform:rotate(360deg) } }
+@keyframes fadeIn  { from { opacity:0 } to { opacity:1 } }
+@keyframes fadeOut { from { opacity:1 } to { opacity:0 } }
+
+/* ── Layout geral ── */
+* { box-sizing:border-box }
+body { font-family:'Inter',sans-serif; -webkit-tap-highlight-color:transparent; user-select:none; }
+
+/* ── Topbar ── */
+.r-topbar {
+  position:fixed; top:0; left:0; right:0; z-index:50;
+  display:flex; align-items:center; gap:8px;
+  padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
+  background:linear-gradient(to bottom,rgba(0,0,0,.85) 0%,rgba(0,0,0,0) 100%);
+  transition:opacity .25s, transform .25s;
+}
+
+/* ── Stage ── */
+.r-stage {
+  position:fixed; inset:0; z-index:10;
+  display:flex; align-items:center; justify-content:center;
+  background:#111;
+  overflow:hidden;
+}
+
+/* ── Livro (canvas) ── */
+.r-book {
+  display:flex; align-items:center; justify-content:center;
+  gap:0; max-width:100%; max-height:100%;
+}
+.r-book canvas { display:block; max-width:100%; max-height:100%; }
+.r-book.book-mode { gap:2px; }
+
+/* ── Botões laterais de página — O CORAÇÃO DO READERA ── */
+.r-page-btn {
+  position:absolute; top:50%; transform:translateY(-50%);
+  z-index:20;
+  width:52px; height:52px;
+  border-radius:50%;
+  border:none;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer;
+  transition: opacity .2s, transform .15s;
+  -webkit-tap-highlight-color:transparent;
+  /* Fundo semitransparente — aparece ao fundo, não distrai do conteúdo */
+  background:rgba(0,0,0,.38);
+  color:#fff;
+  backdrop-filter:blur(4px);
+}
+.r-page-btn .material-symbols-outlined { font-size:32px; }
+.r-page-btn:active { transform:translateY(-50%) scale(.88); }
+.r-page-btn:disabled { opacity:.18; pointer-events:none; }
+
+/* No mobile ficam maiores e mais próximos da borda */
+.r-page-btn-left  { left:6px; }
+.r-page-btn-right { right:6px; }
+
+@media (min-width:600px) {
+  .r-page-btn { width:44px; height:44px; background:rgba(0,0,0,.28); }
+  .r-page-btn .material-symbols-outlined { font-size:26px; }
+  .r-page-btn-left  { left:14px; }
+  .r-page-btn-right { right:14px; }
+}
+
+/* ── Bottom bar ── */
+.r-bottom {
+  position:fixed; bottom:0; left:0; right:0; z-index:50;
+  display:flex; flex-direction:column; gap:8px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background:linear-gradient(to top,rgba(0,0,0,.88) 0%,rgba(0,0,0,0) 100%);
+  transition:opacity .25s, transform .25s;
+}
+.r-bottom-row {
+  display:flex; align-items:center; justify-content:center; gap:8px;
+}
+
+/* ── Barra de progresso ── */
+.r-progress-wrap {
+  display:flex; align-items:center; gap:10px;
+}
+.r-progress-track {
+  flex:1; height:4px; border-radius:4px;
+  background:rgba(255,255,255,.22);
+  position:relative; cursor:pointer;
+}
+.r-progress-fill {
+  height:100%; border-radius:4px;
+  background:#fff;
+  transition:width .2s;
+}
+.r-progress-thumb {
+  position:absolute; top:50%; transform:translate(-50%,-50%);
+  width:14px; height:14px; border-radius:50%;
+  background:#fff; box-shadow:0 0 0 3px rgba(255,255,255,.3);
+  transition:left .2s;
+}
+
+/* ── Contador de página ── */
+.r-page-counter {
+  display:flex; align-items:center; gap:4px;
+  font-size:13px; font-weight:700; color:#fff;
+  white-space:nowrap; flex-shrink:0;
+}
+#rPageInput {
+  width:40px; text-align:center;
+  background:rgba(255,255,255,.15); color:#fff;
+  border:1px solid rgba(255,255,255,.3); border-radius:6px;
+  padding:3px 4px; font:inherit; font-size:13px; font-weight:700;
+  outline:none; -moz-appearance:textfield;
+}
+#rPageInput::-webkit-inner-spin-button,
+#rPageInput::-webkit-outer-spin-button { display:none; }
+.r-page-dec, .r-page-inc {
+  width:28px; height:28px; border-radius:50%; border:none;
+  background:rgba(255,255,255,.15); color:#fff;
+  font-size:18px; font-weight:700; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:background .14s; -webkit-tap-highlight-color:transparent;
+  line-height:1;
+}
+.r-page-dec:active, .r-page-inc:active { background:rgba(255,255,255,.3); transform:scale(.9); }
+
+/* ── Ícone button na topbar ── */
+.r-icon-btn {
+  width:40px; height:40px; border-radius:50%; border:none;
+  background:rgba(255,255,255,.12); color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; flex-shrink:0;
+  transition:background .14s; -webkit-tap-highlight-color:transparent;
+}
+.r-icon-btn:active { background:rgba(255,255,255,.28); }
+.r-icon-btn .material-symbols-outlined { font-size:20px; }
+.r-title {
+  flex:1; min-width:0; font-size:14px; font-weight:700; color:#fff;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+
+/* ── Botões de ação ── */
+.r-action-btn {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:8px 14px; border-radius:999px; border:none;
+  background:rgba(255,255,255,.9); color:#111;
+  font-size:13px; font-weight:600; cursor:pointer;
+  transition:background .14s, transform .1s;
+  -webkit-tap-highlight-color:transparent;
+  font-family:inherit;
+}
+.r-action-btn:active { transform:scale(.95); }
+.r-action-btn-sm { padding:7px 12px; font-size:12px; }
+.r-action-btn-ghost {
+  background:rgba(255,255,255,.15); color:#fff;
+  border:1px solid rgba(255,255,255,.3);
+}
+
+/* ── UI visível/oculta ── */
+.r-ui { transition:opacity .3s ease, visibility .3s ease; }
+.r-ui.hidden { opacity:0; visibility:hidden; }
+
+/* Esconder botões laterais quando UI está oculta — NÃO. 
+   Os botões laterais ficam SEMPRE visíveis (ReadEra behavior). */
+</style>
+
+<script>
+// ══════════════════════════════
+// Estado global
+// ══════════════════════════════
+var READER_ID      = ((window.REPOSITORY_CONFIG&&window.REPOSITORY_CONFIG.params&&window.REPOSITORY_CONFIG.params.id)||(new URLSearchParams(location.search)).get('id'));
+var READER_PATH_ID = ((window.REPOSITORY_CONFIG&&window.REPOSITORY_CONFIG.params&&window.REPOSITORY_CONFIG.params.pathId)||(new URLSearchParams(location.search)).get('pathId'));
+
+var pdfDoc        = null;
+var currentPage   = 1;
+var totalPages    = 1;
+var currentScale  = 1.0;
+var bookMode      = false;
+var isRendering   = false;
+var pendingRender = null;
+var readerMeta    = null;
+var uiVisible     = true;
+var uiTimer       = null;
+
+function tok(){ return (window.REPOSITORY_SESSION&&window.REPOSITORY_SESSION.accessToken)||sessionStorage.getItem('RE_ACCESS_TOKEN')||''; }
+
+// ══════════════════════════════
+// Boot
+// ══════════════════════════════
+onDomReady(function(){
+  if (!READER_ID){ showError('Material não informado.','Abra o leitor a partir de um material.'); return; }
+  loadReaderData();
+  setupInput();
+  setupKeyboard();
+  setupTapUI();
+  scheduleHideUI();
+});
+
+// ══════════════════════════════
+// 1. Buscar dados no backend
+// ══════════════════════════════
+function loadReaderData(){
+  document.getElementById('rSkeleton').style.display = 'flex';
+  document.getElementById('rBook').style.display     = 'none';
+  document.getElementById('rError').style.display    = 'none';
+  google.script.run
+    .withSuccessHandler(onReaderData)
+    .withFailureHandler(function(e){ showError('Erro ao carregar.',(e&&e.message)||String(e)); })
+    .getMaterialReaderData(READER_ID, tok());
+}
+
+function onReaderData(res){
+  if (!res||!res.ok){ showError('Material não encontrado.',(res&&res.error)||''); return; }
+  readerMeta = res;
+  var f = res.file||{};
+
+  // Título
+  document.getElementById('rTitle').textContent = f.final_name||f.suggested_name||f.original_name||'Leitor';
+
+  // Link Drive
+  var driveUrl = (res.reader&&res.reader.driveUrl)||f.google_drive_web_url||'';
+  if (driveUrl) {
+    document.getElementById('rDriveLink').href = driveUrl;
+    document.getElementById('rDriveLink').style.display = 'inline-flex';
+    document.getElementById('rErrorDriveLink').href = driveUrl;
+    document.getElementById('rErrorDriveLink').style.display = 'inline-flex';
+  }
+
+  // Progresso salvo
+  var prog = res.progress||{};
+  currentPage = Math.max(1, parseInt(prog.current_page||1,10));
+  totalPages  = Math.max(currentPage, parseInt(prog.total_pages||1,10));
+
+  // Decidir modo
+  var mime  = String(f.mime_type||'').toLowerCase();
+  var ftype = String(f.file_type||'').toLowerCase();
+  var looksLikePdf = mime.indexOf('pdf')!==-1 || ['book','article','summary','notes','document','slide'].indexOf(ftype)!==-1;
+  var downloadUrl  = (res.reader&&res.reader.downloadUrl)||f.google_drive_download_url||'';
+
+  if (looksLikePdf && downloadUrl) {
+    loadPdfJs(downloadUrl);
+  } else {
+    loadFallback(res);
+  }
+}
+
+// ══════════════════════════════
+// 2a. PDF.js
+// ══════════════════════════════
+function loadPdfJs(url){
+  if (window.pdfjsLib){ initPdf(url); return; }
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  s.onload  = function(){
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    initPdf(url);
+  };
+  s.onerror = function(){ loadFallback(readerMeta); };
+  document.head.appendChild(s);
+}
+
+function initPdf(url){
+  pdfjsLib.getDocument({ url:url, withCredentials:false }).promise
+    .then(function(pdf){
+      pdfDoc     = pdf;
+      totalPages = pdf.numPages;
+      currentPage = Math.min(currentPage, totalPages);
+      document.getElementById('rBtnBook').style.display = 'flex';
+      document.getElementById('rSkeleton').style.display = 'none';
+      document.getElementById('rBook').style.display    = 'flex';
+      autoScale();
+      renderSpread();
+      saveProgress('reading');
+    })
+    .catch(function(err){
+      // Arquivo privado — cair no embed do Drive
+      if (readerMeta&&readerMeta.reader&&readerMeta.reader.previewUrl) {
+        loadFallback(readerMeta, true);
+      } else {
+        showError(
+          'Não foi possível abrir o PDF.',
+          'O arquivo pode estar privado. Use "Abrir no Drive" para ler.\n\n'+((err&&err.message)||'')
+        );
+      }
+    });
+}
+
+// ══════════════════════════════
+// 2b. Fallback
+// ══════════════════════════════
+function loadFallback(res, fromPdfErr){
+  document.getElementById('rSkeleton').style.display = 'none';
+  document.getElementById('rBook').style.display     = 'none';
+  var r = (res&&res.reader)||{};
+  var fb = document.getElementById('rFallback');
+
+  if (r.previewUrl) {
+    fb.innerHTML = '<iframe src="'+esc(r.previewUrl)+'" style="width:100%;height:100%;border:0" loading="lazy" allow="autoplay" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>';
+    fb.style.display = 'block';
+    // Esconder botões laterais — Drive tem paginação própria
+    hidePdfControls();
+    if (fromPdfErr) showToast('Arquivo privado — usando visualizador do Drive.','default',5000);
+  } else {
+    showError('Preview não disponível.','Use "Abrir no Drive" para acessar o material.');
+  }
+}
+
+function hidePdfControls(){
+  ['rBtnPrev','rBtnNext','rProgressWrap','rBtnBook'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.style.display='none';
+  });
+}
+
+// ══════════════════════════════
+// 3. Renderizar página(s)
+// ══════════════════════════════
+function renderSpread(){
+  if (!pdfDoc) return;
+  if (isRendering){ pendingRender = currentPage; return; }
+  isRendering = true;
+
+  var cL = document.getElementById('rCanvasL');
+  var cR = document.getElementById('rCanvasR');
+  var book = document.getElementById('rBook');
+
+  // Área disponível
+  var avW = window.innerWidth;
+  var avH = window.innerHeight;
+
+  pdfDoc.getPage(currentPage).then(function(page){
+    var vp0   = page.getViewport({scale:1});
+    var slotW = bookMode ? avW/2 - 2 : avW;
+    var scale = Math.min(slotW/vp0.width, avH/vp0.height) * currentScale;
+    var vp    = page.getViewport({scale:scale});
+
+    cL.width  = vp.width;
+    cL.height = vp.height;
+    return page.render({canvasContext:cL.getContext('2d'), viewport:vp}).promise
+      .then(function(){
+        var rightPage = (bookMode && currentPage < totalPages) ? currentPage+1 : null;
+        if (!rightPage){
+          cR.style.display = 'none';
+          book.classList.remove('book-mode');
+          finishRender();
+          return;
+        }
+        return pdfDoc.getPage(rightPage).then(function(pageR){
+          var vpR = pageR.getViewport({scale:scale});
+          cR.width  = vpR.width;
+          cR.height = vpR.height;
+          cR.style.display = 'block';
+          book.classList.add('book-mode');
+          return pageR.render({canvasContext:cR.getContext('2d'), viewport:vpR}).promise
+            .then(finishRender);
+        });
+      });
+  }).catch(function(e){
+    isRendering = false;
+    showToast('Erro na página '+(e&&e.message||e),'error',4000);
+  });
+}
+
+function finishRender(){
+  isRendering = false;
+  updateUI_();
+  if (pendingRender !== null && pendingRender !== currentPage){
+    var p = pendingRender; pendingRender = null; goTo(p);
+  }
+}
+
+// ══════════════════════════════
+// 4. Navegação
+// ══════════════════════════════
+function goTo(p){
+  if (!pdfDoc) return;
+  p = Math.max(1, Math.min(totalPages, parseInt(p,10)||1));
+  if (bookMode && p>1 && p%2===0) p--;
+  if (p===currentPage && !isRendering) return;
+  currentPage = p;
+  renderSpread();
+  saveProgress('reading');
+}
+function nextPage(){
+  var step = (bookMode && currentPage<totalPages) ? 2 : 1;
+  goTo(currentPage+step);
+  flashBtn('rBtnNext');
+}
+function prevPage(){
+  var step = bookMode ? 2 : 1;
+  goTo(currentPage-step);
+  flashBtn('rBtnPrev');
+}
+function flashBtn(id){
+  var el=document.getElementById(id); if(!el) return;
+  el.style.background='rgba(255,255,255,.38)';
+  setTimeout(function(){ el.style.background=''; },180);
+}
+function goToInput(){
+  var v = parseInt(document.getElementById('rPageInput').value,10);
+  if(v&&v>=1&&v<=totalPages) goTo(v);
+  else document.getElementById('rPageInput').value = currentPage;
+}
+
+// Seek pelo clique na barra de progresso
+function seekByClick(e){
+  var track = document.getElementById('rProgressTrack');
+  var rect  = track.getBoundingClientRect();
+  var ratio = Math.max(0, Math.min(1, (e.clientX-rect.left)/rect.width));
+  goTo(Math.round(ratio*(totalPages-1))+1);
+}
+
+// ══════════════════════════════
+// 5. Atualizar UI
+// ══════════════════════════════
+function updateUI_(){
+  var show = (bookMode && currentPage<totalPages)
+    ? currentPage+'-'+(currentPage+1) : String(currentPage);
+  document.getElementById('rPageInput').value  = currentPage;
+  document.getElementById('rTotalLabel').textContent = '/ '+totalPages;
+  var pct = totalPages>1 ? (currentPage-1)/(totalPages-1) : 0;
+  document.getElementById('rProgressFill').style.width = (pct*100)+'%';
+  document.getElementById('rProgressThumb').style.left  = (pct*100)+'%';
+  var btnP = document.getElementById('rBtnPrev');
+  var btnN = document.getElementById('rBtnNext');
+  if(btnP) btnP.disabled = currentPage<=1;
+  if(btnN) btnN.disabled = bookMode ? currentPage+1>=totalPages : currentPage>=totalPages;
+}
+
+// ══════════════════════════════
+// 6. Zoom / ajuste
+// ══════════════════════════════
+function readerZoom(d){ currentScale=Math.max(.5,Math.min(3,currentScale+d)); if(pdfDoc) renderSpread(); }
+function readerFit() { currentScale=1; autoScale(); if(pdfDoc) renderSpread(); }
+function autoScale(){
+  if(!pdfDoc) return;
+  pdfDoc.getPage(1).then(function(page){
+    var vp = page.getViewport({scale:1});
+    var slotW = bookMode ? window.innerWidth/2-2 : window.innerWidth;
+    currentScale = Math.min(slotW/vp.width, window.innerHeight/vp.height);
+    currentScale = Math.max(.5,Math.min(2.5,currentScale));
+  });
+}
+
+// ══════════════════════════════
+// 7. Modo livro
+// ══════════════════════════════
+function toggleBookMode(){
+  bookMode = !bookMode;
+  document.getElementById('rBookIcon').textContent = bookMode ? 'auto_stories' : 'menu_book';
+  if(bookMode && currentPage>1 && currentPage%2===0) currentPage--;
+  autoScale();
+  renderSpread();
+}
+
+// ══════════════════════════════
+// 8. UI some/aparece (ReadEra)
+// ══════════════════════════════
+function showUI(){
+  document.getElementById('rTopbar').classList.remove('hidden');
+  document.getElementById('rBottom').classList.remove('hidden');
+  uiVisible = true;
+  scheduleHideUI();
+}
+function hideUI(){
+  document.getElementById('rTopbar').classList.add('hidden');
+  document.getElementById('rBottom').classList.add('hidden');
+  uiVisible = false;
+}
+function scheduleHideUI(){
+  clearTimeout(uiTimer);
+  uiTimer = setTimeout(hideUI, 3500);
+}
+function toggleUI(){
+  if(uiVisible) hideUI();
+  else showUI();
+}
+
+// Tap no centro da tela = toggle UI
+// Tap na borda esquerda (25%) = página anterior  
+// Tap na borda direita (25%) = próxima página
+function setupTapUI(){
+  var stage = document.getElementById('rStage');
+  var lastTap = 0;
+  stage.addEventListener('pointerdown', function(e){
+    // Ignorar se clicou num botão
+    if(e.target.closest('.r-page-btn')||e.target.closest('.r-icon-btn')||e.target.closest('.r-progress-track')) return;
+    var now = Date.now();
+    var isDblTap = now-lastTap < 280;
+    lastTap = now;
+    if(isDblTap && pdfDoc){
+      // Duplo toque = zoom rápido
+      readerZoom(0.2); showUI(); return;
+    }
+    // Zona de toque
+    var x = e.clientX / window.innerWidth;
+    if(x < 0.25 && pdfDoc){ prevPage(); showUI(); }
+    else if(x > 0.75 && pdfDoc){ nextPage(); showUI(); }
+    else { toggleUI(); }
+  });
+}
+
+// ══════════════════════════════
+// 9. Teclado
+// ══════════════════════════════
+function setupKeyboard(){
+  document.addEventListener('keydown',function(e){
+    if(e.target.tagName==='INPUT') return;
+    if(e.key==='ArrowRight'||e.key==='PageDown'){ e.preventDefault(); nextPage(); showUI(); }
+    if(e.key==='ArrowLeft' ||e.key==='PageUp')  { e.preventDefault(); prevPage(); showUI(); }
+    if(e.key==='Home') { goTo(1); showUI(); }
+    if(e.key==='End')  { goTo(totalPages); showUI(); }
+    if(e.key==='b'||e.key==='B') toggleBookMode();
+    if(e.key==='+'||e.key==='=') readerZoom(.15);
+    if(e.key==='-')              readerZoom(-.15);
+    if(e.key==='Escape')         goBackFromReader();
+    showUI();
+  });
+  window.addEventListener('resize',function(){
+    clearTimeout(window.__rResizeT);
+    window.__rResizeT = setTimeout(function(){
+      if(pdfDoc){ autoScale(); renderSpread(); }
+    },180);
+  });
+}
+
+// ══════════════════════════════
+// 10. Input de página
+// ══════════════════════════════
+function setupInput(){
+  var inp = document.getElementById('rPageInput');
+  // Swipe vertical na barra de progresso
+  var startX=0;
+  var track = document.getElementById('rProgressTrack');
+  if(track){
+    track.addEventListener('touchstart',function(e){startX=e.touches[0].clientX;},{passive:true});
+    track.addEventListener('touchmove',function(e){
+      e.preventDefault();
+      var dx = e.touches[0].clientX - startX;
+      var rect = track.getBoundingClientRect();
+      var ratio = Math.max(0,Math.min(1,(e.touches[0].clientX-rect.left)/rect.width));
+      currentPage = Math.round(ratio*(totalPages-1))+1;
+      updateUI_();
+    },{passive:false});
+    track.addEventListener('touchend',function(){
+      goTo(currentPage);
+    },{passive:true});
+  }
+}
+
+// ══════════════════════════════
+// 11. Tela cheia
+// ══════════════════════════════
+function toggleFullscreen(){
+  if(document.fullscreenElement) document.exitFullscreen&&document.exitFullscreen();
+  else document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();
+}
+
+// ══════════════════════════════
+// 12. Progresso
+// ══════════════════════════════
+function saveProgress(status){
+  if(!READER_ID||!pdfDoc) return;
+  var pct = totalPages>0 ? Math.round((currentPage/totalPages)*100) : 0;
+  google.script.run
+    .withSuccessHandler(function(){}).withFailureHandler(function(){})
+    .saveReadingProgress({
+      accessToken:tok(), materialId:READER_ID,
+      currentPage:currentPage, totalPages:totalPages,
+      progressPercent:pct, status:status||'reading'
+    },tok());
+}
+function completeReader(){ saveProgress('completed'); showToast('Concluído!','success'); }
+function reviewReaderLater(){ saveProgress('review_later'); showToast('Salvo para revisar.','success'); }
+
+// ══════════════════════════════
+// 13. Voltar
+// ══════════════════════════════
+function goBackFromReader(){
+  if(READER_PATH_ID) navigate('trilha-detalhe',{pathId:READER_PATH_ID});
+  else if(READER_ID) navigate('detalhe',{id:READER_ID});
+  else navigate('biblioteca');
+}
+
+// ══════════════════════════════
+// 14. Erro
+// ══════════════════════════════
+function showError(title, msg){
+  document.getElementById('rSkeleton').style.display = 'none';
+  document.getElementById('rBook').style.display     = 'none';
+  document.getElementById('rFallback').style.display = 'none';
+  var el = document.getElementById('rError');
+  el.style.display = 'flex';
+  el.style.flexDirection = 'column';
+  el.style.alignItems = 'center';
+  el.style.justifyContent = 'center';
+  document.getElementById('rErrorMsg').textContent = (title?title+'\n\n':'')+msg;
+  showUI(); clearTimeout(uiTimer); // Manter UI visível no erro
+}
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>

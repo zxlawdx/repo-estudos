@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?></head>
+<body class="bg-background">
+<?!= include('partials/sidebar'); ?>
+<div class="main-content">
+  <?!= include('partials/topbar'); ?>
+  <main class="page-content">
+
+    <!-- Cabeçalho mobile-first -->
+    <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+      <div>
+        <h2 style="margin:0 0 4px">Grafo de Estudos</h2>
+        <p style="margin:0;font-size:13px;color:#737686">Mapa de trilhas. Os materiais aparecem ao expandir uma trilha.</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-primary" onclick="navigate('relacoes')" style="border-radius:100px;padding:8px 16px;font-size:13px">
+          <span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">account_tree</span> Gerenciar relações
+        </button>
+      </div>
+    </div>
+
+    <div id="graphError" style="display:none"></div>
+
+    <section class="graph-shell">
+      <!-- Coluna principal: grafo -->
+      <div class="graph-card">
+        <!-- Toolbar desktop/tablet -->
+        <div class="graph-toolbar">
+          <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:180px">
+            <span class="material-symbols-outlined" style="color:var(--primary);font-size:18px">search</span>
+            <input id="graphSearch" class="form-control" type="search" placeholder="Filtrar nós…" oninput="debounceGraphFilter()">
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn-secondary" onclick="GRAPH_RENDERER.zoom('mainGraph',-1)" style="border-radius:50%;width:40px;height:40px;padding:0;display:flex;align-items:center;justify-content:center" title="Zoom -"><span class="material-symbols-outlined" style="font-size:20px">zoom_out</span></button>
+            <button class="btn-secondary" onclick="GRAPH_RENDERER.zoom('mainGraph',1)"  style="border-radius:50%;width:40px;height:40px;padding:0;display:flex;align-items:center;justify-content:center" title="Zoom +"><span class="material-symbols-outlined" style="font-size:20px">zoom_in</span></button>
+            <button class="btn-secondary" onclick="resetAndFit()" style="border-radius:100px;padding:8px 12px;font-size:13px">
+              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">center_focus_strong</span> Resetar
+            </button>
+          </div>
+          <button id="btnCreateRel" class="btn-secondary" onclick="toggleCreateRelMode()" title="Criar relação arrastando entre nós" style="border-radius:100px;padding:8px 12px;font-size:13px"><span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">add_link</span> Criar relação</button><span id="graphCounter" class="badge badge-secondary" style="white-space:nowrap">0 nós · 0 relações</span>
+        </div>
+
+        <!-- Viewport SVG -->
+        <div id="mainGraph" class="obs-graph-viewport">
+          <div class="skeleton" style="height:100%;border-radius:0 0 18px 18px"></div>
+          <!-- Controles flutuantes (visíveis em qualquer tamanho) -->
+          <div class="graph-float-controls">
+            <button onclick="GRAPH_RENDERER.zoom('mainGraph',1)" title="Zoom +">
+              <span class="material-symbols-outlined">add</span>
+            </button>
+            <button onclick="GRAPH_RENDERER.zoom('mainGraph',-1)" title="Zoom -">
+              <span class="material-symbols-outlined">remove</span>
+            </button>
+            <button onclick="resetAndFit()" title="Centralizar">
+              <span class="material-symbols-outlined">center_focus_strong</span>
+            </button>
+            <button onclick="toggleFiltersSheet()" title="Filtros" id="btnFiltersToggle">
+              <span class="material-symbols-outlined">tune</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Legenda sempre visível -->
+        <div class="graph-legend" id="mainGraph_legend">
+          <div class="graph-legend-inner" id="graphLegendInner">Carregando…</div>
+        </div>
+      </div>
+
+      <!-- Coluna lateral: filtros + detalhes (desktop) -->
+      <aside class="graph-card graph-side-panel" id="graphSidePanel">
+        <h3 style="font-size:15px;font-weight:800;margin:0 0 6px;color:#191c1e">Filtros</h3>
+        <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px">Mostre ou oculte tipos de nós e relações.</p>
+        <div id="pathFilterWrap" style="display:none;margin-bottom:12px"><h3 style="font-size:14px;font-weight:800;margin:0 0 6px;color:var(--text-primary)">Trilhas</h3><p style="font-size:11px;color:var(--text-muted);margin:0 0 8px">Por padrão, o grafo mostra só trilhas. Clique em uma trilha e use “Expandir”.</p><div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap"><button onclick="selectAllPaths()" class="btn-secondary" style="font-size:11px;padding:4px 8px;border-radius:100px">Todas</button><button onclick="selectNoPaths()" class="btn-secondary" style="font-size:11px;padding:4px 8px;border-radius:100px">Nenhuma</button><button onclick="collapseAllPaths()" class="btn-secondary" style="font-size:11px;padding:4px 8px;border-radius:100px">Recolher</button></div><div class="graph-filter-grid" id="pathFilterList" style="margin-bottom:10px"></div></div><div class="graph-filter-grid" id="nodeFilters"></div>
+        <h3 style="font-size:15px;font-weight:800;margin:16px 0 6px;color:#191c1e">Relações</h3>
+        <div class="graph-filter-grid" id="relationFilters"></div>
+        <h3 style="font-size:15px;font-weight:800;margin:16px 0 6px;color:#191c1e">Direção</h3>
+        <div class="graph-filter-grid" id="directionFilters"></div>
+        <hr style="border:none;border-top:1px solid #e0e3e5;margin:16px 0">
+        <div id="nodeDetails"><p style="font-size:13px;color:#737686">Clique em um nó ou relação para ver detalhes.</p></div>
+      </aside>
+    </section>
+
+    <div class="safe-bottom-pad"></div>
+  </main>
+</div>
+
+<!-- Bottom sheet mobile: filtros -->
+<div id="graphFiltersSheet" class="graph-bottom-sheet">
+  <div class="graph-bs-handle"></div>
+  <button class="graph-bs-close" onclick="toggleFiltersSheet(false)"><span class="material-symbols-outlined" style="font-size:18px">close</span></button>
+  <h3 style="font-size:16px;font-weight:800;margin:0 0 12px">Filtros do Grafo</h3>
+  <div class="graph-filter-grid" id="nodeFiltersMobile" style="margin-bottom:10px"></div>
+  <div class="graph-filter-grid" id="relationFiltersMobile" style="margin-bottom:10px"></div>
+  <div class="graph-filter-grid" id="directionFiltersMobile"></div>
+  <button class="btn-primary" onclick="applyMobileFilters()" style="width:100%;border-radius:12px;padding:12px;margin-top:14px">Aplicar filtros</button>
+</div>
+<div id="graphFiltersBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:55" onclick="toggleFiltersSheet(false)"></div>
+
+<!-- Bottom sheet mobile: detalhes de nó/aresta -->
+<div id="graphDetailSheet" class="graph-bottom-sheet">
+  <div class="graph-bs-handle"></div>
+  <button class="graph-bs-close" onclick="closeDetailSheet()"><span class="material-symbols-outlined" style="font-size:18px">close</span></button>
+  <div id="graphDetailSheetContent"></div>
+</div>
+<div id="graphDetailBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:55" onclick="closeDetailSheet()"></div>
+
+<?!= include('partials/bottomnav'); ?>
+<?!= include('scripts/app'); ?>
+<?!= include('scripts/graph'); ?>
+
+<script>
+// ── Estado ──────────────────────────────────────────────────
+var graphData      = { nodes:[], edges:[] };
+var graphFilterTimer = null;
+var lastPrepared   = null;
+var selectedPaths  = [];  // ids de trilhas selecionadas para filtro
+var createRelMode  = false;
+var isMobile       = function(){ return window.innerWidth < 768; };
+var canEdit        = false;
+
+var nodeTypeLabels = {
+  material:'Materiais', path:'Trilhas', category:'Categorias',
+  subject:'Assuntos', tag:'Tags', topic:'Tópicos'
+};
+var relationLabels = {
+  prerequisite:'Pré-requisito', recommended_after:'Recomendado depois',
+  related:'Relacionado', same_author:'Mesmo autor', same_category:'Mesma categoria',
+  same_subject:'Mesmo assunto', criticizes:'Critica', explains:'Explica',
+  depends_on:'Depende de', part_of:'Parte de', path_contains:'Contém na trilha',
+  path_prerequisite:'Trilha pré-requisito', path_continuation:'Continuação',
+  complementary:'Complementar', required:'Obrigatório',
+  optional:'Opcional', custom:'Personalizada'
+};
+
+function graphToken(){
+  return (window.AuthSessionManager&&AuthSessionManager.getAccessToken())||
+         (window.REPOSITORY_SESSION&&window.REPOSITORY_SESSION.accessToken)||
+         sessionStorage.getItem('RE_ACCESS_TOKEN')||'';
+}
+
+function escAttr(value){
+  return String(value == null ? '' : value)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function jsStr(value){ return JSON.stringify(String(value == null ? '' : value)); }
+
+// ── Boot ────────────────────────────────────────────────────
+onDomReady(function(){
+  buildGraphFilters();
+  buildLegend();
+  loadGraph();
+});
+
+function buildLegend(){
+  var el = document.getElementById('graphLegendInner'); if(!el) return;
+  el.innerHTML =
+    '<span class="graph-legend-item"><svg width="34" height="12" style="vertical-align:middle"><defs><marker id="lA" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--obs-arrow-fill,#505f76)"/></marker></defs>' +
+    '<line x1="2" y1="6" x2="24" y2="6" stroke="var(--obs-edge-stroke,#a0aabf)" stroke-width="2" marker-end="url(#lA)"/></svg> Direcional</span>' +
+    '<span class="graph-legend-item"><svg width="34" height="12" style="vertical-align:middle"><line x1="2" y1="6" x2="30" y2="6" stroke="var(--obs-edge-stroke,#737686)" stroke-width="2" stroke-dasharray="5 3"/></svg> Não direcional</span>' +
+    '<span class="graph-legend-item" style="color:var(--primary)">■ Material</span>' +
+    '<span class="graph-legend-item" style="color:var(--tertiary)">■ Trilha</span>';
+}
+
+function buildPillGroup(items, attrName, containerId){
+  var el=document.getElementById(containerId); if(!el) return;
+  el.innerHTML=items.map(function(it){
+    return '<label class="graph-filter-pill"><input type="checkbox" data-'+attrName+'="'+it.k+'" checked onchange="renderGraph()"> '+it.l+'</label>';
+  }).join('');
+}
+
+function buildGraphFilters(){
+  var nodeItems=Object.keys(nodeTypeLabels).map(function(k){return{k:k,l:nodeTypeLabels[k]};});
+  var relItems=Object.keys(relationLabels).map(function(k){return{k:k,l:relationLabels[k]};});
+  var dirItems=[{k:'directed',l:'Direcionais'},{k:'undirected',l:'Não direcionais'}];
+  buildPillGroup(nodeItems,'node-filter','nodeFilters');
+  buildPillGroup(relItems,'rel-filter','relationFilters');
+  buildPillGroup(dirItems,'dir-filter','directionFilters');
+  buildPillGroup(nodeItems,'node-filter-m','nodeFiltersMobile');
+  buildPillGroup(relItems,'rel-filter-m','relationFiltersMobile');
+  buildPillGroup(dirItems,'dir-filter-m','directionFiltersMobile');
+}
+
+// ── Carregar dados ───────────────────────────────────────────
+function loadGraph(){
+  document.getElementById('graphError').style.display='none';
+  document.getElementById('mainGraph').innerHTML='<div class="skeleton" style="height:100%;border-radius:0 0 18px 18px"></div>';
+  var params=(window.REPOSITORY_CONFIG&&window.REPOSITORY_CONFIG.params)||{};
+  var pathId=params.pathId||(new URLSearchParams(window.location.search)).get('pathId')||'';
+  google.script.run
+    .withSuccessHandler(function(res){
+      if(!res||!res.ok){ showGraphError('Falha ao carregar grafo','getGraphData',(res&&res.error)||'Resposta inválida',res&&res.stack); return; }
+      graphData={ nodes:res.nodes||[], edges:res.edges||[] };
+      canEdit=!!(res.canManage);
+      buildPathFilter(graphData.nodes);
+      renderGraph();
+    })
+    .withFailureHandler(function(e){ showGraphError('Erro no servidor','getGraphData',(e&&e.message)||String(e),e&&e.stack); })
+    .getGraphData({ accessToken:graphToken(), pathId:pathId });
+}
+
+// ── Filtro por trilha ─────────────────────────────────────
+function buildPathFilter(nodes){
+  var paths=(nodes||[]).filter(function(n){ return n.type==='path'; });
+  var wrap=document.getElementById('pathFilterWrap');
+  if(!wrap||!paths.length) return;
+  wrap.style.display='block';
+  var list=document.getElementById('pathFilterList');
+  if(!list) return;
+  list.innerHTML=paths.map(function(p){
+    return '<label class="graph-filter-pill" style="font-size:12px"><input type="checkbox" checked data-path-id="'+escHtml(p.id)+'" onchange="applyPathFilter()"> '+escHtml(p.label)+'</label>';
+  }).join('');
+  selectedPaths=paths.map(function(p){ return p.id; });
+}
+
+function applyPathFilter(){
+  selectedPaths=[];
+  var all=document.querySelectorAll('[data-path-id]');
+  document.querySelectorAll('[data-path-id]:checked').forEach(function(cb){ selectedPaths.push(cb.getAttribute('data-path-id')); });
+  if(all.length && !selectedPaths.length) selectedPaths=['__NO_PATHS__'];
+  renderGraph();
+}
+
+function selectOnlyPath(pathId){
+  selectedPaths=[pathId];
+  document.querySelectorAll('[data-path-id]').forEach(function(cb){
+    cb.checked=(cb.getAttribute('data-path-id')===pathId);
+  });
+  renderGraph();
+  closeDetailSheet();
+}
+
+function selectAllPaths(){
+  selectedPaths=[];
+  document.querySelectorAll('[data-path-id]').forEach(function(cb){
+    cb.checked=true; selectedPaths.push(cb.getAttribute('data-path-id'));
+  });
+  renderGraph();
+}
+function selectNoPaths(){
+  selectedPaths=['__NO_PATHS__'];
+  document.querySelectorAll('[data-path-id]').forEach(function(cb){ cb.checked=false; });
+  renderGraph();
+}
+function collapseAllPaths(){
+  if(window.GRAPH_RENDERER && GRAPH_RENDERER.expandedPathIds){
+    GRAPH_RENDERER.expandedPathIds().forEach(function(pid){ GRAPH_RENDERER.setExpanded(pid,false); });
+  }
+  renderGraph();
+}
+function togglePathExpanded(pathId){
+  if(window.GRAPH_RENDERER) GRAPH_RENDERER.toggleExpand(pathId,'mainGraph');
+}
+
+// ── Render ────────────────────────────────────────────────
+function filterState(){
+  var types={},rels={},dirs={};
+  document.querySelectorAll('[data-node-filter]').forEach(function(i){types[i.getAttribute('data-node-filter')]=i.checked;});
+  document.querySelectorAll('[data-rel-filter]').forEach(function(i){rels[i.getAttribute('data-rel-filter')]=i.checked;});
+  document.querySelectorAll('[data-dir-filter]').forEach(function(i){dirs[i.getAttribute('data-dir-filter')]=i.checked;});
+  var allPaths=document.querySelectorAll('[data-path-id]');
+  var allSelected=!allPaths.length||selectedPaths.length===allPaths.length;
+  return {
+    q:(document.getElementById('graphSearch')||{}).value||'',
+    types:types, relations:rels, directions:dirs,
+    paths: allSelected ? null : selectedPaths,
+    pathsOnly: true,
+    expandedPaths: (window.GRAPH_RENDERER && GRAPH_RENDERER.expandedPathIds) ? GRAPH_RENDERER.expandedPathIds() : [],
+    showContext: false
+  };
+}
+
+function renderGraph(){
+  var opts={
+    scope:'general',
+    scopeId:'',
+    accessToken:graphToken(),
+    filters:filterState(),
+    counterId:'graphCounter',
+    createRelationMode: createRelMode,
+    onNodeClick:function(node,prepared){ lastPrepared=prepared; _onNodeClick(node,prepared); },
+    onEdgeClick:function(edge,prepared){ lastPrepared=prepared; _onEdgeClick(edge,prepared); },
+    onBlankClick:function(){ document.getElementById('nodeDetails').innerHTML='<p style="font-size:13px;color:var(--text-muted)">Clique em um nó ou relação para ver detalhes.</p>'; },
+    onCreateRelation:function(src,tgt){ openCreateRelModal(src,tgt); },
+    onExpandToggle:function(pathId,expanded){ showToast(expanded?'Trilha expandida':'Trilha recolhida','success'); renderGraph(); }
+  };
+  try {
+    GRAPH_RENDERER.render('mainGraph', graphData, opts);
+  } catch(err) {
+    showGraphError('Erro ao renderizar grafo','GRAPH_RENDERER.render',(err&&err.message)||String(err),err&&err.stack);
+  }
+  // Atualizar botão modo criar
+  var btn=document.getElementById('btnCreateRel');
+  if(btn) btn.style.background=createRelMode?'var(--primary)':'';
+}
+
+function debounceGraphFilter(){ clearTimeout(graphFilterTimer); graphFilterTimer=setTimeout(renderGraph,120); }
+
+function resetAndFit(){
+  GRAPH_RENDERER.clearPositions('general', '', graphToken());
+  GRAPH_RENDERER.reset('mainGraph');
+  renderGraph();
+}
+
+// ── Modo criar relação ────────────────────────────────────
+function toggleCreateRelMode(){
+  createRelMode=!createRelMode;
+  GRAPH_RENDERER.setCreateRelationMode('mainGraph', createRelMode);
+  var btn=document.getElementById('btnCreateRel');
+  if(btn){
+    btn.style.background=createRelMode?'var(--primary)':'';
+    btn.style.color=createRelMode?'#fff':'';
+    btn.title=createRelMode?'Clique em um nó de origem, depois no destino':'Criar relação (arraste entre nós)';
+  }
+  showToast(createRelMode?'Clique no nó de origem para criar uma relação':'Modo criação desativado.', createRelMode?'success':'default', 2500);
+  renderGraph();
+}
+
+function openCreateRelModal(src, tgt){
+  if(!src||!tgt){ showToast('Selecione origem e destino válidos.','error'); return; }
+  createRelMode=false;
+  renderGraph();
+  // Preencher modal
+  var el=document.getElementById('modalCreateRel');
+  if(!el){ _buildCreateRelModal(); el=document.getElementById('modalCreateRel'); }
+  document.getElementById('crmSrcLabel').textContent=src.label+' ('+GRAPH_RENDERER.nodeTypeLabel(src.type)+')';
+  document.getElementById('crmTgtLabel').textContent=tgt.label+' ('+GRAPH_RENDERER.nodeTypeLabel(tgt.type)+')';
+  document.getElementById('crmSrcId').value=src.id;
+  document.getElementById('crmSrcType').value=src.type;
+  document.getElementById('crmTgtId').value=tgt.id;
+  document.getElementById('crmTgtType').value=tgt.type;
+  document.getElementById('crmError').textContent='';
+  openModal('modalCreateRel');
+}
+
+function _buildCreateRelModal(){
+  var rel_opts=Object.keys(relationLabels).map(function(k){return '<option value="'+k+'">'+relationLabels[k]+'</option>';}).join('');
+  var div=document.createElement('div');
+  div.id='modalCreateRel'; div.className='modal-backdrop'; div.style.display='none';
+  div.innerHTML='<div class="modal-box"><div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">' +
+    '<h3 style="font-size:16px;font-weight:700;margin:0;color:var(--text-primary)">Nova relação</h3>' +
+    '<button onclick="closeModal(\'modalCreateRel\')" class="btn-secondary" style="border:none;padding:4px"><span class="material-symbols-outlined">close</span></button>' +
+    '</div><div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">' +
+    '<input type="hidden" id="crmSrcId"><input type="hidden" id="crmSrcType"><input type="hidden" id="crmTgtId"><input type="hidden" id="crmTgtType">' +
+    '<div class="graph-edge-arrow" style="flex-wrap:wrap;gap:8px"><span id="crmSrcLabel" style="color:var(--primary);font-weight:700"></span>' +
+    '<span class="material-symbols-outlined graph-edge-arrow-icon">arrow_right_alt</span><span id="crmTgtLabel" style="color:var(--tertiary);font-weight:700"></span></div>' +
+    '<div class="filter-select"><label>Tipo de relação</label><select id="crmRelType" class="form-control">'+rel_opts+'</select></div>' +
+    '<div class="filter-select"><label>Direção</label><select id="crmDir" class="form-control"><option value="directed">Direcional (→)</option><option value="undirected">Não direcional (↔)</option></select></div>' +
+    '<div class="filter-select"><label>Peso (1–5)</label><input id="crmWeight" type="number" class="form-control" min="1" max="5" value="1"></div>' +
+    '<div class="filter-select"><label>Nota / Justificativa</label><textarea id="crmNote" class="form-control" rows="2" placeholder="Opcional…"></textarea></div>' +
+    '<p id="crmError" style="color:var(--error);font-size:13px;margin:0"></p>' +
+    '<div style="display:flex;gap:10px"><button onclick="closeModal(\'modalCreateRel\')" class="btn-secondary" style="flex:1;border-radius:10px">Cancelar</button>' +
+    '<button onclick="saveNewRelation()" id="crmSaveBtn" class="btn-primary" style="flex:1;border-radius:10px">Salvar relação</button></div>' +
+    '</div></div>';
+  document.body.appendChild(div);
+}
+
+function saveNewRelation(){
+  var srcId=document.getElementById('crmSrcId').value;
+  var srcType=document.getElementById('crmSrcType').value;
+  var tgtId=document.getElementById('crmTgtId').value;
+  var tgtType=document.getElementById('crmTgtType').value;
+  var relType=document.getElementById('crmRelType').value;
+  var dir=document.getElementById('crmDir').value;
+  var weight=parseInt(document.getElementById('crmWeight').value)||1;
+  var note=document.getElementById('crmNote').value.trim();
+  var errEl=document.getElementById('crmError');
+
+  if(srcId===tgtId){ errEl.textContent='Origem e destino não podem ser iguais.'; return; }
+  var btn=document.getElementById('crmSaveBtn');
+  setBtnLoading(btn,true,'Salvando…');
+  errEl.textContent='';
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      setBtnLoading(btn,false,'Salvar relação');
+      if(res&&res.ok){
+        showToast('Relação criada!','success');
+        closeModal('modalCreateRel');
+        loadGraph();
+      } else {
+        errEl.textContent=(res&&res.error)||'Erro ao salvar relação.';
+      }
+    })
+    .withFailureHandler(function(e){ setBtnLoading(btn,false,'Salvar relação'); errEl.textContent=(e&&e.message)||String(e); })
+    .saveGraphEdge({
+      accessToken:graphToken(),
+      source_type:srcType, source_id:srcId,
+      target_type:tgtType, target_id:tgtId,
+      relation_type:relType, direction:dir, weight:weight, note:note
+    });
+}
+
+// ── Detalhes de nó ────────────────────────────────────────
+function _onNodeClick(node, prepared){
+  // No grafo geral, clique em trilha deve expandir automaticamente uma vez.
+  // O botão do painel continua permitindo recolher/expandir manualmente.
+  if(node && node.type==='path' && window.GRAPH_RENDERER && !GRAPH_RENDERER.isExpanded(node.id)){
+    GRAPH_RENDERER.setExpanded(node.id, true);
+    renderGraph();
+    // Rebuscar o node no grafo preparado após expansão para painel consistente.
+    var key = 'path:' + String(node.id);
+    var pr = lastPrepared || prepared || {};
+    if(pr.nodes){
+      var found = pr.nodes.filter(function(n){ return n.key===key; })[0];
+      if(found) node = found;
+    }
+  }
+  var html=buildNodeDetailHTML(node,prepared);
+  document.getElementById('nodeDetails').innerHTML=html;
+  if(isMobile()) openDetailSheet(html);
+}
+
+function buildNodeDetailHTML(node, prepared){
+  if(!node) return '';
+  var meta=node.meta||{};
+  var isPath=node.type==='path';
+  var isExpanded=isPath&&GRAPH_RENDERER.isExpanded(node.id);
+  var actions='';
+  if(node.type==='material'){
+    actions='<button class="btn-primary" onclick="navigate(\'detalhe\',{id:'+jsStr(node.id)+'});closeDetailSheet()" style="width:100%;border-radius:12px;padding:10px;margin-top:8px">Abrir material</button>';
+  } else if(isPath){
+    actions='<div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">' +
+      '<button class="btn-primary" onclick="navigate(\'trilha-detalhe\',{pathId:'+jsStr(node.id)+'});closeDetailSheet()" style="border-radius:12px;padding:10px">Abrir trilha</button>' +
+      '<button class="btn-secondary" onclick="togglePathExpanded('+jsStr(node.id)+');closeDetailSheet()" style="border-radius:12px;padding:9px;font-size:12px">'+(isExpanded?'Recolher trilha':'Expandir trilha')+'</button>' +
+      '<button class="btn-secondary" onclick="selectOnlyPath('+jsStr(node.id)+'); if(window.GRAPH_RENDERER){GRAPH_RENDERER.setExpanded('+jsStr(node.id)+',true)}; renderGraph();closeDetailSheet()" style="border-radius:12px;padding:9px;font-size:12px">Ver somente esta trilha</button>' +
+      '<button class="btn-secondary" onclick="selectAllPaths();closeDetailSheet()" style="border-radius:12px;padding:9px;font-size:12px">Voltar ao grafo geral</button>' +
+      (canEdit?'<button class="btn-secondary" onclick="toggleCreateRelMode();closeDetailSheet()" style="border-radius:12px;padding:9px;font-size:12px">Criar relação</button>':'') +
+    '</div>';
+  } else if(['category','subject','tag'].indexOf(node.type)!==-1){
+    actions='<button class="btn-secondary" onclick="navigate(\'biblioteca\',{filterType:'+jsStr(node.type)+',filterId:'+jsStr(node.id)+'});closeDetailSheet()" style="width:100%;border-radius:12px;padding:9px;margin-top:8px;font-size:12px">Filtrar biblioteca</button>';
+  }
+  var html='<span class="badge badge-primary" style="margin-bottom:6px">'+escHtml(GRAPH_RENDERER.nodeTypeLabel(node.type))+'</span>';
+  html+='<h3 class="graph-details-title">'+escHtml(node.label||'Sem título')+'</h3>';
+  if(isPath){
+    html+='<p style="font-size:12px;color:var(--text-muted);margin:0 0 8px">'+escHtml(meta.description||'Trilha de estudos')+'</p>';
+  }
+  html+='<div class="graph-meta-list">';
+  if(isPath){
+    html+='<div class="graph-meta-row"><b>Materiais</b><span>'+escHtml(String(meta._materialCount||0))+'</span></div>';
+    html+='<div class="graph-meta-row"><b>Estado</b><span>'+(isExpanded?'Expandida':'Recolhida')+'</span></div>';
+    if(meta.visibility) html+='<div class="graph-meta-row"><b>Visibilidade</b><span>'+escHtml(meta.visibility)+'</span></div>';
+    if(meta.level) html+='<div class="graph-meta-row"><b>Nível</b><span>'+escHtml(meta.level)+'</span></div>';
+  }
+  if(meta.file_type) html+='<div class="graph-meta-row"><b>Tipo</b><span>'+escHtml(meta.file_type)+'</span></div>';
+  if(meta.status)    html+='<div class="graph-meta-row"><b>Status</b><span>'+escHtml(meta.status)+'</span></div>';
+  if(meta.progress_status) html+='<div class="graph-meta-row"><b>Progresso</b><span>'+escHtml(meta.progress_status)+'</span></div>';
+  html+='</div>'+actions;
+  if(prepared&&prepared.edges){
+    var conn=prepared.edges.filter(function(e){return e.source_key===node.key||e.target_key===node.key;}).length;
+    if(conn>0) html+='<p style="font-size:12px;color:var(--text-muted);margin-top:8px">'+conn+' relação(ões) conectada(s)</p>';
+  }
+  return html;
+}
+
+// ── Detalhes de aresta ────────────────────────────────────
+function _onEdgeClick(edge, prepared){
+  var html=buildEdgeDetailHTML(edge,prepared);
+  document.getElementById('nodeDetails').innerHTML=html;
+  if(isMobile()) openDetailSheet(html);
+}
+
+function buildEdgeDetailHTML(edge, prepared){
+  if(!edge) return '';
+  var nmap={}; if(prepared&&prepared.nodes) prepared.nodes.forEach(function(n){ nmap[n.key]=n; });
+  var src=nmap[edge.source_key]||{label:edge.source_type||'Origem'};
+  var tgt=nmap[edge.target_key]||{label:edge.target_type||'Destino'};
+  var isDir=edge.direction!=='undirected';
+  var html='<div class="graph-edge-detail">' +
+    '<span class="badge badge-secondary">Relação</span>' +
+    '<div class="graph-edge-arrow" style="margin:10px 0">' +
+      '<span style="font-weight:700;color:var(--primary)">'+escHtml(src.label)+'</span>' +
+      '<span class="material-symbols-outlined graph-edge-arrow-icon">'+(isDir?'arrow_right_alt':'sync_alt')+'</span>' +
+      '<span style="font-weight:700;color:var(--tertiary)">'+escHtml(tgt.label)+'</span>' +
+    '</div>' +
+    '<div class="graph-meta-list">' +
+      '<div class="graph-meta-row"><b>Tipo</b><span>'+escHtml(GRAPH_RENDERER.relationLabel(edge.relation_type))+'</span></div>' +
+      '<div class="graph-meta-row"><b>Direção</b><span>'+escHtml(GRAPH_RENDERER.directionLabel(edge.direction))+'</span></div>' +
+      '<div class="graph-meta-row"><b>Peso</b><span>'+escHtml(String(edge.weight||1))+'</span></div>' +
+      (edge.note?'<div class="graph-meta-row"><b>Nota</b><span style="font-style:italic">'+escHtml(edge.note)+'</span></div>':'') +
+    '</div>' +
+    (edge.generated?'<span class="badge badge-secondary" style="margin-top:8px">Gerada automaticamente</span>':'') +
+  '</div>';
+  if(!edge.generated&&edge.id){
+    html+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
+      '<button class="btn-secondary" onclick="navigate(\'detalhe\',{id:\''+escAttr(edge.source_id)+'\'});closeDetailSheet()" style="flex:1;border-radius:10px;padding:8px;font-size:12px">Abrir origem</button>' +
+      '<button class="btn-secondary" onclick="navigate(\'detalhe\',{id:\''+escAttr(edge.target_id)+'\'});closeDetailSheet()" style="flex:1;border-radius:10px;padding:8px;font-size:12px">Abrir destino</button>' +
+      (canEdit?'<button onclick="deleteRelationFromGraph(\''+escAttr(edge.id)+'\');closeDetailSheet()" style="flex:1;border-radius:10px;padding:8px;font-size:12px;background:var(--error-container);color:var(--on-error-container);border:1px solid var(--error);cursor:pointer">Remover</button>':'') +
+    '</div>';
+  }
+  return html;
+}
+
+function deleteRelationFromGraph(id){
+  if(!confirm('Remover esta relação?')) return;
+  google.script.run
+    .withSuccessHandler(function(res){
+      if(res&&res.ok){ showToast('Removida.','success'); loadGraph(); }
+      else showToast((res&&res.error)||'Erro.','error');
+    })
+    .withFailureHandler(function(e){ showToast((e&&e.message)||String(e),'error'); })
+    .deleteGraphEdge(id, graphToken());
+}
+
+// ── Bottom sheets ──────────────────────────────────────────
+function openDetailSheet(html){
+  document.getElementById('graphDetailSheetContent').innerHTML=html;
+  document.getElementById('graphDetailSheet').classList.add('open');
+  document.getElementById('graphDetailBackdrop').style.display='block';
+  document.body.style.overflow='hidden';
+}
+function closeDetailSheet(){
+  document.getElementById('graphDetailSheet').classList.remove('open');
+  document.getElementById('graphDetailBackdrop').style.display='none';
+  document.body.style.overflow='';
+}
+function toggleFiltersSheet(force){
+  var sheet=document.getElementById('graphFiltersSheet'), bd=document.getElementById('graphFiltersBackdrop');
+  var open=sheet.classList.contains('open');
+  var next=force!==undefined?force:!open;
+  if(next){ sheet.classList.add('open'); bd.style.display='block'; document.body.style.overflow='hidden'; }
+  else    { sheet.classList.remove('open'); bd.style.display='none'; document.body.style.overflow=''; }
+}
+function applyMobileFilters(){ toggleFiltersSheet(false); renderGraph(); }
+
+// ── Erro ──────────────────────────────────────────────────
+function showGraphError(title,action,message,stack){
+  var el=document.getElementById('graphError'); el.style.display='block';
+  el.innerHTML='<div class="settings-card" style="border-color:var(--error);background:var(--surface);margin-bottom:16px">' +
+    '<div class="badge badge-rejected">ERRO VISÍVEL</div>' +
+    '<h2 style="color:var(--error);font-size:20px;margin:10px 0 8px">'+escHtml(title)+'</h2>' +
+    '<p><b>Ação:</b> '+escHtml(action||'-')+'</p>' +
+    '<p><b>Mensagem:</b> '+escHtml(message||'-')+'</p>' +
+    '<pre class="debug-box" style="max-height:160px;font-size:11px">'+escHtml(stack||message||'')+'</pre>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">' +
+      '<button class="btn-primary" onclick="loadGraph()">Tentar novamente</button>' +
+      '<button class="btn-secondary" onclick="renderGraph()">Renderizar com dados atuais</button>' +
+      '<button class="btn-secondary" onclick="GRAPH_RENDERER.clearPositions(\'general\');renderGraph()">Limpar posições</button>' +
+      '<button class="btn-secondary" onclick="navigate(\'dashboard\')">Dashboard</button>' +
+    '</div></div>';
+}
+</script>
+
+</body>
+</html>

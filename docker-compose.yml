@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend/system
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      APPS_SCRIPT_API_URL: ${APPS_SCRIPT_API_URL}
+      APPS_SCRIPT_API_SECRET: ${APPS_SCRIPT_API_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:4200}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200,http://localhost:8080}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-dev-secret-dev-secret-dev-secret}
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend

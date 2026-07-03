@@ -19,13 +19,26 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
+                .cors(cors -> {})
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/api/users/**",
                                 "/oauth2/**",
                                 "/login/**",
-                                "/h2-console/**"
+                                "/h2-console/**",
+                                "/api/appscript-auth/**",
+                                "/api/files/**",
+                                "/api/profile/**",
+                                "/api/drive/**",
+                                "/api/paths/**",
+                                "/api/graph/**",
+                                "/api/categories/**",
+                                "/api/reader/**",
+                                "/api/dashboard/**",
+                                "/api/admin-proxy/**",
+                                "/error"
                         ).permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth -> oauth

@@ -1,0 +1,38 @@
+<!-- Overlay mobile -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <h1>Repositório</h1>
+    <p>Estudos Acadêmicos</p>
+  </div>
+  <div class="sidebar-user" onclick="navigate('perfil')" role="button" tabindex="0">
+    <span id="sidebarAvatar" class="shell-avatar"><span class="material-symbols-outlined">account_circle</span></span>
+    <div style="min-width:0">
+      <strong id="sidebarUserName">Usuário</strong>
+      <span id="sidebarUserRole">viewer</span>
+    </div>
+  </div>
+
+  <nav style="flex:1;padding:4px 0;">
+    <a class="nav-item <?= page==='dashboard'  ? 'active':'' ?>" href="?page=dashboard"><span class="material-symbols-outlined <?= page==='dashboard'  ? 'icon-fill':'' ?>">dashboard</span>Dashboard</a>
+    <a class="nav-item <?= page==='biblioteca' ? 'active':'' ?>" href="?page=biblioteca"><span class="material-symbols-outlined <?= page==='biblioteca' ? 'icon-fill':'' ?>">library_books</span>Biblioteca</a>
+    <a class="nav-item <?= page==='upload'     ? 'active':'' ?>" href="?page=upload"><span class="material-symbols-outlined <?= page==='upload'     ? 'icon-fill':'' ?>">upload_file</span>Upload</a>
+    <a class="nav-item <?= page==='cadastrar-link' ? 'active':'' ?>" href="?page=cadastrar-link"><span class="material-symbols-outlined <?= page==='cadastrar-link' ? 'icon-fill':'' ?>">add_link</span>Cadastrar link</a>
+    <a class="nav-item <?= page==='revisao'    ? 'active':'' ?>" href="?page=revisao"><span class="material-symbols-outlined <?= page==='revisao'    ? 'icon-fill':'' ?>">rate_review</span>Revisão/Aprovação</a>
+    <a class="nav-item <?= page==='trilhas' || page==='trilha-detalhe' ? 'active':'' ?>" href="?page=trilhas"><span class="material-symbols-outlined <?= page==='trilhas' || page==='trilha-detalhe' ? 'icon-fill':'' ?>">route</span>Trilhas</a>
+    <a class="nav-item <?= page==='grafo' ? 'active':'' ?>" href="?page=grafo"><span class="material-symbols-outlined <?= page==='grafo' ? 'icon-fill':'' ?>">hub</span>Grafo</a>
+    <a class="nav-item <?= page==='relacoes' ? 'active':'' ?>" href="?page=relacoes"><span class="material-symbols-outlined <?= page==='relacoes' ? 'icon-fill':'' ?>">account_tree</span>Relações</a>
+    <a class="nav-item <?= page==='resenhas' || page==='resenha-detalhe' ? 'active':'' ?>" href="?page=resenhas"><span class="material-symbols-outlined <?= page==='resenhas' || page==='resenha-detalhe' ? 'icon-fill':'' ?>">reviews</span>Resenhas</a>
+    <a class="nav-item <?= page==='categorias' ? 'active':'' ?>" href="?page=categorias"><span class="material-symbols-outlined <?= page==='categorias' ? 'icon-fill':'' ?>">category</span>Categorias</a>
+    <a class="nav-item <?= page==='historico'  ? 'active':'' ?>" href="?page=historico"><span class="material-symbols-outlined <?= page==='historico'  ? 'icon-fill':'' ?>">history</span>Histórico</a>
+    <a class="nav-item <?= page==='gerencia' || page==='admin-usuarios' ? 'active':'' ?>" href="?page=gerencia" data-admin-only="1"><span class="material-symbols-outlined <?= page==='gerencia' || page==='admin-usuarios' ? 'icon-fill':'' ?>">admin_panel_settings</span>Gerência</a>
+  </nav>
+
+  <div class="sidebar-footer" style="padding:8px 0;">
+    <a class="nav-item <?= page==='perfil' ? 'active':'' ?>" href="?page=perfil"><span class="material-symbols-outlined <?= page==='perfil' ? 'icon-fill':'' ?>">account_circle</span>Meu perfil</a>
+    <a class="nav-item <?= page==='configuracoes' ? 'active':'' ?>" href="?page=configuracoes"><span class="material-symbols-outlined <?= page==='configuracoes' ? 'icon-fill':'' ?>">settings</span>Configurações</a>
+    <a class="nav-item" href="#" onclick="handleLogout(); return false;"><span class="material-symbols-outlined">logout</span>Sair</a>
+  </div>
+</aside>

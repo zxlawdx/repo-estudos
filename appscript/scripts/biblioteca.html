@@ -1,0 +1,145 @@
+<script>
+// ============================================================
+// biblioteca.js — Script específico da view Biblioteca
+// ============================================================
+
+var BIBL = (function() {
+  var _state = {
+    view:    'grid',
+    page:    1,
+    limit:   12,
+    chip:    'all',
+    filters: {},
+  };
+  var _searchTimer = null;
+
+  /** Carrega e renderiza arquivos conforme estado atual */
+  function load(reset) {
+    if (reset !== false) { _state.page = 1; }
+    var grid = document.getElementById('filesGrid');
+    if (grid && _state.page === 1) {
+      grid.innerHTML = '<div class="skeleton" style="height:220px;border-radius:16px"></div>'.repeat(6);
+    }
+    var params = Object.assign({}, _state.filters, {
+      page:  _state.page,
+      limit: _state.limit,
+    });
+    if (_state.chip && _state.chip !== 'all') {
+      var typeChips = ['book','article','slide','test','summary','document','notes','dataset'];
+      if (typeChips.includes(_state.chip))   params.fileType = _state.chip;
+      else if (_state.chip === 'pending')     params.status   = 'pending';
+      else if (_state.chip === 'public')      params.visibility = 'public';
+    }
+    google.script.run
+      .withSuccessHandler(function(res) { render(res); })
+      .withFailureHandler(function(e) { showToast(e.message, 'error'); })
+      .getFiles(params);
+  }
+
+  function render(data) {
+    var grid    = document.getElementById('filesGrid');
+    var empty   = document.getElementById('emptyState');
+    var pagDiv  = document.getElementById('pagination');
+    if (!grid) return;
+    if (!data || !data.ok || !data.files || data.files.length === 0) {
+      grid.innerHTML = '';
+      if (empty) empty.style.display = 'flex';
+      if (pagDiv) pagDiv.style.display = 'none';
+      return;
+    }
+    if (empty)  empty.style.display  = 'none';
+    if (_state.view === 'grid') {
+      grid.style.display = '';
+      grid.innerHTML = data.files.map(_renderCard).join('');
+    } else {
+      grid.style.display = 'block';
+      grid.innerHTML = '<div style="display:flex;flex-direction:column;gap:8px">' +
+        data.files.map(_renderRow).join('') + '</div>';
+    }
+    // Paginação
+    if (pagDiv) {
+      var hasMore = data.files.length === _state.limit;
+      pagDiv.style.display = hasMore ? 'flex' : 'none';
+      if (hasMore) {
+        pagDiv.innerHTML = '<button class="btn-secondary" onclick="BIBL.nextPage()" ' +
+          'style="border-radius:100px;padding:9px 24px;font-size:14px">Carregar mais</button>';
+      }
+    }
+  }
+
+  function _renderCard(f) {
+    var name = escHtml(f.final_name || f.suggested_name || f.original_name);
+    var cat  = (f.categories && f.categories.name) ? escHtml(f.categories.name) : '';
+    return '<div class="file-card" onclick="navigate(\'detalhe\',{id:\'' + f.id + '\'})">' +
+      '<div class="file-card-header"><div class="file-card-badges">' +
+      fileTypeBadge(f.file_type) + statusBadge(f.status) +
+      (cat ? '<span class="badge badge-secondary">' + cat + '</span>' : '') + '</div></div>' +
+      '<div class="file-card-title">' + name + '</div>' +
+      '<div class="file-card-subtitle">' + escHtml(f.original_name) + '</div>' +
+      '<div class="file-card-meta">' +
+      (f.author ? '<div class="file-meta-item"><label>Autor</label><span>' + escHtml(f.author) + '</span></div>' : '') +
+      (f.year   ? '<div class="file-meta-item"><label>Ano</label><span>'   + f.year             + '</span></div>' : '') +
+      '<div class="file-meta-item"><label>Tamanho</label><span>' + fmtSize(f.file_size) + '</span></div>' +
+      '</div>' +
+      '<div class="file-card-actions">' +
+      '<button class="btn-primary" onclick="event.stopPropagation();navigate(\'detalhe\',{id:\'' + f.id + '\'})">Abrir</button>' +
+      (f.google_drive_preview_url
+        ? '<a href="' + f.google_drive_preview_url + '" target="_blank" onclick="event.stopPropagation()" ' +
+          'class="btn-secondary" style="text-decoration:none"><span class="material-symbols-outlined" style="font-size:18px">open_in_new</span></a>'
+        : '') +
+      '</div></div>';
+  }
+
+  function _renderRow(f) {
+    var name = escHtml(f.final_name || f.suggested_name || f.original_name);
+    return '<div style="background:#fff;border:1px solid #c3c6d7;border-radius:12px;padding:12px 16px;' +
+      'display:flex;align-items:center;gap:12px;cursor:pointer;transition:box-shadow .15s" ' +
+      'class="hover-lift" onclick="navigate(\'detalhe\',{id:\'' + f.id + '\'})">' +
+      '<div>' + fileTypeBadge(f.file_type) + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+      '<div style="font-size:14px;font-weight:600;color:#191c1e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + name + '</div>' +
+      '<div style="font-size:11px;color:#737686">' + (f.author ? escHtml(f.author) + (f.year ? ' · ' + f.year : '') : '') + '</div>' +
+      '</div>' + statusBadge(f.status) +
+      '<span style="font-size:11px;color:#737686;flex-shrink:0">' + fmtDate(f.created_at) + '</span>' +
+      '<span class="material-symbols-outlined" style="color:#c3c6d7;font-size:20px">chevron_right</span>' +
+      '</div>';
+  }
+
+  function setView(v) {
+    _state.view = v;
+    load(true);
+  }
+
+  function setChip(el, chip) {
+    document.querySelectorAll('.filter-chip').forEach(function(c) { c.classList.remove('active'); });
+    if (el) el.classList.add('active');
+    _state.chip = chip;
+    load(true);
+  }
+
+  function applyFilters() {
+    _state.filters = {
+      categoryId: (document.getElementById('fCategory')  || {}).value || undefined,
+      status:     (document.getElementById('fStatus')    || {}).value || undefined,
+      visibility: (document.getElementById('fVisibility')|| {}).value || undefined,
+      search:     (document.getElementById('fSearch')    || {}).value || undefined,
+    };
+    load(true);
+  }
+
+  function debounceSearch(val) {
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(function() {
+      _state.filters.search = val || undefined;
+      load(true);
+    }, 350);
+  }
+
+  function nextPage() {
+    _state.page++;
+    load(false);
+  }
+
+  return { load, setView, setChip, applyFilters, debounceSearch, nextPage };
+})();
+</script>

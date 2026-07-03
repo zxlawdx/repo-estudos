@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?></head>
+<body class="bg-background">
+<?!= include('partials/sidebar'); ?>
+<div class="main-content">
+  <?!= include('partials/topbar'); ?>
+  <main class="page-content">
+    <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div>
+        <h2>Gerenciar Relações</h2>
+        <p>Interligue tópicos, materiais, trilhas, categorias, assuntos e tags. O Drive não é duplicado.</p>
+      </div>
+      <button class="btn-secondary" onclick="navigate('grafo')" style="border-radius:100px;padding:8px 16px"><span class="material-symbols-outlined">hub</span> Ver grafo</button>
+    </div>
+
+    <div id="relError" style="display:none"></div>
+    <section class="relation-shell">
+      <div class="relation-card" style="padding:16px">
+        <h3 style="font-size:17px;font-weight:800;margin:0 0 12px;color:#191c1e">Nova relação</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" class="responsive-two-cols">
+          <div>
+            <label class="filter-select"><span>Origem</span><input id="sourceSearch" type="search" class="form-control" placeholder="Buscar material, trilha, tópico…" oninput="debouncedEntitySearch('source')"></label>
+            <div id="sourceSelected" class="entity-selected-box" style="margin:8px 0">Nenhuma origem selecionada.</div>
+            <div id="sourceResults" style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow:auto"></div>
+          </div>
+          <div>
+            <label class="filter-select"><span>Destino</span><input id="targetSearch" type="search" class="form-control" placeholder="Buscar material, trilha, tópico…" oninput="debouncedEntitySearch('target')"></label>
+            <div id="targetSelected" class="entity-selected-box" style="margin:8px 0">Nenhum destino selecionado.</div>
+            <div id="targetResults" style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow:auto"></div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 120px;gap:12px;margin-top:14px" class="responsive-three-cols">
+          <label class="filter-select"><span>Tipo de relação</span><select id="relationType" class="form-control">
+            <option value="prerequisite">Pré-requisito</option><option value="recommended_after">Recomendado depois</option><option value="related" selected>Relacionado</option><option value="same_author">Mesmo autor</option><option value="same_category">Mesma categoria</option><option value="same_subject">Mesmo assunto</option><option value="criticizes">Critica</option><option value="explains">Explica</option><option value="depends_on">Depende de</option><option value="part_of">Parte de</option><option value="custom">Personalizada</option>
+          </select></label>
+          <label class="filter-select"><span>Direção</span><select id="relationDirection" class="form-control"><option value="directed">Direcional</option><option value="undirected">Não direcional</option></select></label>
+          <label class="filter-select"><span>Peso</span><input id="relationWeight" type="number" class="form-control" min="1" max="10" value="1"></label>
+        </div>
+        <label class="filter-select" style="margin-top:12px"><span>Nota/justificativa</span><textarea id="relationNote" class="form-control" rows="3" placeholder="Ex: Leia Fanon antes deste texto para entender o contexto anticolonial."></textarea></label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+          <button id="saveRelationBtn" class="btn-primary" onclick="saveRelation()" style="border-radius:12px;padding:11px 18px"><span class="material-symbols-outlined">save</span> Salvar relação</button>
+          <button class="btn-secondary" onclick="clearRelationForm()" style="border-radius:12px;padding:11px 18px">Limpar</button>
+          <button class="btn-secondary" onclick="openTopicBox()" style="border-radius:12px;padding:11px 18px"><span class="material-symbols-outlined">add_circle</span> Criar tópico/conceito</button>
+        </div>
+        <div id="topicBox" class="settings-card" style="display:none;margin-top:14px;background:#f7f9fb">
+          <h4 style="font-weight:800;margin:0 0 8px">Criar tópico/conceito</h4>
+          <div style="display:grid;grid-template-columns:1fr auto;gap:8px" class="responsive-two-cols"><input id="topicLabel" class="form-control" placeholder="Ex: Colonialismo"><button class="btn-primary" onclick="createTopic()" style="border-radius:10px;padding:10px 14px">Criar</button></div>
+        </div>
+      </div>
+
+      <aside class="relation-card relation-side-panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px"><h3 style="font-size:17px;font-weight:800;margin:0;color:#191c1e">Relações existentes</h3><button class="btn-secondary" onclick="loadRelations()" style="border-radius:999px;padding:7px 10px"><span class="material-symbols-outlined">refresh</span></button></div>
+        <input id="relationListSearch" type="search" class="form-control" placeholder="Filtrar relações" oninput="renderRelations()" style="margin-bottom:10px">
+        <div id="relationList" class="relation-list"><div class="skeleton" style="height:70px;border-radius:14px"></div><div class="skeleton" style="height:70px;border-radius:14px"></div></div>
+      </aside>
+    </section>
+    <div class="safe-bottom-pad"></div>
+  </main>
+</div>
+<?!= include('partials/bottomnav'); ?>
+<?!= include('scripts/app'); ?>
+<?!= include('scripts/graph'); ?>
+<script>
+var selectedSource=null, selectedTarget=null, relationRows=[], entityTimers={};
+function relToken(){ return sessionStorage.getItem('RE_ACCESS_TOKEN') || ''; }
+onDomReady(function(){ searchEntities('source'); searchEntities('target'); loadRelations(); });
+function debouncedEntitySearch(side){ clearTimeout(entityTimers[side]); entityTimers[side]=setTimeout(function(){searchEntities(side);},260); }
+function searchEntities(side){
+  var q=document.getElementById(side+'Search').value;
+  var box=document.getElementById(side+'Results'); box.innerHTML='<div class="skeleton" style="height:44px;border-radius:12px"></div>';
+  google.script.run.withSuccessHandler(function(res){
+    if(!res||!res.ok){box.innerHTML='<div class="badge badge-rejected">Erro ao buscar</div>';return;}
+    var list=res.entities||[];
+    if(!list.length){box.innerHTML='<p style="font-size:12px;color:#737686">Nenhum resultado.</p>';return;}
+    box.innerHTML=list.map(function(e){return '<button class="entity-result" onclick="selectEntity(\''+side+'\',\''+encodeURIComponent(JSON.stringify(e))+'\')"><span class="material-symbols-outlined" style="color:#004ac6">'+iconForType(e.type)+'</span><span style="min-width:0"><b style="display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(e.label)+'</b><small style="color:#737686">'+escHtml(typeLabel(e.type))+'</small></span></button>';}).join('');
+  }).withFailureHandler(function(e){box.innerHTML='<div class="badge badge-rejected">'+escHtml((e&&e.message)||String(e))+'</div>';}).searchGraphEntities({accessToken:relToken(),q:q,limit:30});
+}
+function selectEntity(side, encoded){ var e=JSON.parse(decodeURIComponent(encoded)); if(side==='source') selectedSource=e; else selectedTarget=e; document.getElementById(side+'Selected').innerHTML='<b>'+escHtml(e.label)+'</b><br><small>'+escHtml(typeLabel(e.type))+' · '+escHtml(String(e.id).substring(0,10))+'…</small>'; }
+function saveRelation(){
+  if(!selectedSource||!selectedTarget){showToast('Selecione origem e destino.','error');return;}
+  var btn=document.getElementById('saveRelationBtn'); setBtnLoading(btn,true,'Salvando…');
+  google.script.run.withSuccessHandler(function(res){setBtnLoading(btn,false); if(res&&res.ok){showToast('Relação salva.','success'); clearRelationForm(); loadRelations();} else showRelError('Falha ao salvar relação','saveGraphEdge',(res&&res.error)||'Resposta inválida',res&&res.stack);}).withFailureHandler(function(e){setBtnLoading(btn,false);showRelError('Erro no servidor','saveGraphEdge',(e&&e.message)||String(e),e&&e.stack);}).saveGraphEdge({accessToken:relToken(),sourceType:selectedSource.type,sourceId:selectedSource.id,targetType:selectedTarget.type,targetId:selectedTarget.id,relationType:document.getElementById('relationType').value,direction:document.getElementById('relationDirection').value,weight:document.getElementById('relationWeight').value,note:document.getElementById('relationNote').value});
+}
+function clearRelationForm(){ selectedSource=null; selectedTarget=null; document.getElementById('sourceSelected').textContent='Nenhuma origem selecionada.'; document.getElementById('targetSelected').textContent='Nenhum destino selecionado.'; document.getElementById('relationNote').value=''; }
+function loadRelations(){ google.script.run.withSuccessHandler(function(res){ if(!res||!res.ok){showRelError('Falha ao listar relações','listGraphEdges',(res&&res.error)||'Resposta inválida',res&&res.stack);return;} relationRows=res.edges||[]; renderRelations(res.nodes||[]); }).withFailureHandler(function(e){showRelError('Erro no servidor','listGraphEdges',(e&&e.message)||String(e),e&&e.stack);}).listGraphEdges({accessToken:relToken(),limit:500}); }
+function renderRelations(nodes){
+  nodes = nodes || [];
+  var nodeMap={}; if(nodes.length){nodes.forEach(function(n){nodeMap[n.key]=n;}); window.__relNodeMap=nodeMap;} else nodeMap=window.__relNodeMap||{};
+  var q=(document.getElementById('relationListSearch').value||'').toLowerCase();
+  var rows=relationRows.filter(function(e){return !q||JSON.stringify(e).toLowerCase().indexOf(q)!==-1||(nodeMap[e.source_key]&&nodeMap[e.source_key].label.toLowerCase().indexOf(q)!==-1)||(nodeMap[e.target_key]&&nodeMap[e.target_key].label.toLowerCase().indexOf(q)!==-1);});
+  var box=document.getElementById('relationList'); if(!rows.length){box.innerHTML='<p style="font-size:13px;color:#737686">Nenhuma relação encontrada.</p>';return;}
+  box.innerHTML=rows.map(function(e){
+  var s=nodeMap[e.source_key]||{label:(e.source_type||'?')+' '+String(e.source_id||'').substring(0,8)};
+  var t=nodeMap[e.target_key]||{label:(e.target_type||'?')+' '+String(e.target_id||'').substring(0,8)};
+  var isDir=e.direction!=='undirected';
+  var dirSymbol=isDir?'→':'↔';
+  var dirLabel=isDir?'Direcional':'Não direcional';
+  var dirColor=isDir?'#004ac6':'#737686';
+  return '<article class="relation-item">' +
+    '<div class="relation-item-main">' +
+      '<div style="min-width:0;flex:1">' +
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
+          '<span class="badge badge-secondary" style="font-size:10px">'+escHtml(GRAPH_RENDERER.relationLabel(e.relation_type))+'</span>' +
+          '<span style="font-size:11px;color:'+dirColor+';font-weight:700">'+dirSymbol+' '+dirLabel+'</span>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">' +
+          '<b style="font-size:13px;color:#191c1e">'+escHtml(s.label)+'</b>' +
+          '<span style="font-size:18px;color:'+dirColor+'">'+dirSymbol+'</span>' +
+          '<b style="font-size:13px;color:#191c1e">'+escHtml(t.label)+'</b>' +
+        '</div>' +
+        (e.note?'<p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;font-style:italic">'+escHtml(e.note)+'</p>':'') +
+      '</div>' +
+      '<div style="flex-shrink:0;display:flex;flex-direction:column;gap:6px;align-items:flex-end">' +
+        (e.generated?'<span class="badge badge-secondary">automática</span>':
+          '<button class="btn-danger" onclick="deleteRelation(\''+escHtml(e.id)+'\')" style="border-radius:999px;padding:7px 11px;white-space:nowrap">Remover</button>') +
+      '</div>' +
+    '</div>' +
+  '</article>';
+}).join('');
+}
+function deleteRelation(id){ if(!confirm('Remover esta relação?')) return; google.script.run.withSuccessHandler(function(res){ if(res&&res.ok){showToast('Relação removida.','success');loadRelations();} else showToast((res&&res.error)||'Erro ao remover.','error'); }).withFailureHandler(function(e){showToast((e&&e.message)||String(e),'error');}).deleteGraphEdge(id,relToken()); }
+function openTopicBox(){ var b=document.getElementById('topicBox'); b.style.display=b.style.display==='none'?'block':'none'; }
+function createTopic(){ var label=document.getElementById('topicLabel').value.trim(); if(!label){showToast('Informe o nome do tópico.','error');return;} google.script.run.withSuccessHandler(function(res){ if(res&&res.ok){showToast('Tópico criado.','success');document.getElementById('topicLabel').value=''; searchEntities('source'); searchEntities('target');} else showToast((res&&res.error)||'Erro ao criar tópico.','error'); }).withFailureHandler(function(e){showToast((e&&e.message)||String(e),'error');}).createGraphTopic({accessToken:relToken(),label:label}); }
+function iconForType(t){return {material:'description',path:'route',category:'category',subject:'school',tag:'tag',topic:'bubble_chart'}[t]||'radio_button_unchecked';}
+function typeLabel(t){return {material:'Material',path:'Trilha',category:'Categoria',subject:'Assunto',tag:'Tag',topic:'Tópico'}[t]||t;}
+function showRelError(title,action,message,stack){var el=document.getElementById('relError');el.style.display='block';el.innerHTML='<div class="settings-card" style="border-color:#ffb4ab;background:#fff7f6"><div class="badge badge-rejected">ERRO VISÍVEL</div><h2 style="color:#ba1a1a;font-size:22px;margin:10px 0 8px">'+escHtml(title)+'</h2><p><b>Ação:</b> '+escHtml(action||'-')+'</p><p><b>Mensagem:</b> '+escHtml(message||'-')+'</p><pre style="white-space:pre-wrap;background:#111;color:#fff;padding:14px;border-radius:12px;overflow:auto;max-height:240px">'+escHtml(stack||message||'')+'</pre><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn-primary" onclick="loadRelations()">Tentar novamente</button><button class="btn-secondary" onclick="navigate(\'dashboard\')">Dashboard</button></div></div>';}
+</script>
+</body>
+</html>

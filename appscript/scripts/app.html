@@ -1,0 +1,464 @@
+<script>
+// ============================================================
+// app.js — Utilitários globais + navegação rápida sem trocar stack
+// Google Apps Script HTML Service · JS puro
+// ============================================================
+
+window.REPOSITORY_SESSION = (function(){
+  try {
+    // Preferir localStorage (persiste entre F5), fallback para sessionStorage
+    var raw = localStorage.getItem('RE_AUTH_SESSION_V2');
+    var stored = raw ? JSON.parse(raw) : null;
+    return {
+      accessToken: (stored && stored.accessToken) || sessionStorage.getItem('RE_ACCESS_TOKEN') || '',
+      user:    (stored && stored.user)    || JSON.parse(sessionStorage.getItem('RE_USER')    || '{}'),
+      profile: (stored && stored.profile) || JSON.parse(sessionStorage.getItem('RE_PROFILE') || '{}')
+    };
+  } catch (_) { return { accessToken:'', user:{}, profile:{} }; }
+})();
+
+function onDomReady(fn) {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once:true });
+  else setTimeout(fn, 0);
+}
+
+function escHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+function showFatalScreen(title, view, message, stack) {
+  var root = document.getElementById('app') || document.body;
+  root.innerHTML = '<main style="max-width:920px;margin:24px auto;background:#fff;border:1px solid #ddd;border-radius:16px;padding:24px;font-family:Inter,Arial,sans-serif">' +
+    '<div style="display:inline-flex;gap:8px;align-items:center;background:#ffdad6;color:#93000a;border-radius:999px;padding:6px 12px;font-weight:700;font-size:12px">ERRO VISÍVEL</div>' +
+    '<h1 style="color:#ba1a1a;margin:16px 0 8px">' + escHtml(title || 'Erro no app') + '</h1>' +
+    '<p><b>View:</b> ' + escHtml(view || currentPageName()) + '</p>' +
+    '<p><b>Mensagem:</b> ' + escHtml(message || 'Erro desconhecido') + '</p>' +
+    '<pre style="white-space:pre-wrap;background:#111;color:#fff;padding:16px;border-radius:12px;overflow:auto;max-height:360px">' + escHtml(stack || message || '') + '</pre>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap"><a href="javascript:navigate(\'biblioteca\',{},{force:true})" style="background:#505f76;color:white;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:700">Voltar para biblioteca</a>' +
+    '<a href="javascript:navigate(\'dashboard\',{},{force:true})" style="background:#004ac6;color:white;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:700">Ir para dashboard</a>' +
+    '<a href="javascript:navigate(currentPageName(),{}, {force:true})" style="background:#93000a;color:white;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:700">Tentar novamente</a></div></main>';
+}
+
+function getWebAppUrlClient() {
+  var cfg = window.REPOSITORY_CONFIG || {};
+  return String(cfg.appUrl || '').replace(/\/+$/, '');
+}
+
+function currentPageName() {
+  try { return (window.REPOSITORY_CONFIG && window.REPOSITORY_CONFIG.page) || new URLSearchParams(location.search).get('page') || 'login'; }
+  catch (_) { return 'login'; }
+}
+
+function buildPageUrl(page, params) {
+  var base = getWebAppUrlClient();
+  var qs = '?page=' + encodeURIComponent(page || 'login');
+  params = params || {};
+  Object.keys(params).forEach(function(k){
+    if (params[k] !== undefined && params[k] !== null && params[k] !== '') qs += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+  });
+  if (!base) return qs;
+  return base + qs;
+}
+
+function hardNavigate(page, params) {
+  var url = buildPageUrl(page, params);
+  if (!getWebAppUrlClient() && String(location.href).indexOf('userCodeAppPanel') >= 0) {
+    showFatalScreen('URL do Web App não encontrada', page, 'ScriptApp.getService().getUrl() retornou vazio. Reimplante como Web app e abra pela URL /exec.', location.href);
+    return;
+  }
+  window.open(url, '_top');
+}
+function goPage(page, params) { navigate(page, params); }
+
+function cacheKeyForPage_(page, params) {
+  var clean = params || {};
+  return 'RE_SPA_PAGE_' + page + '_' + JSON.stringify(clean);
+}
+function getCachedPage_(page, params) {
+  try {
+    var raw = sessionStorage.getItem(cacheKeyForPage_(page, params));
+    if (!raw) return null;
+    var obj = JSON.parse(raw);
+    if (!obj || !obj.html || Date.now() - obj.t > 120000) return null;
+    return obj;
+  } catch (_) { return null; }
+}
+function setCachedPage_(page, params, html) {
+  try { sessionStorage.setItem(cacheKeyForPage_(page, params), JSON.stringify({ t: Date.now(), html: html })); }
+  catch (_) {}
+}
+function clearPageCache() {
+  try {
+    Object.keys(sessionStorage).forEach(function(k){ if (k.indexOf('RE_SPA_PAGE_') === 0) sessionStorage.removeItem(k); });
+  } catch (_) {}
+}
+
+function ensureSpaLoadingBar_() {
+  var bar = document.getElementById('spaLoadingBar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'spaLoadingBar';
+    bar.style.cssText = 'position:fixed;left:0;top:0;height:3px;width:0;background:#004ac6;z-index:999999;transition:width .25s ease,opacity .25s ease;opacity:0';
+    document.body.appendChild(bar);
+  }
+  return bar;
+}
+function setSpaBusy_(busy) {
+  var bar = ensureSpaLoadingBar_();
+  document.body.classList.toggle('spa-busy', !!busy);
+  if (busy) { bar.style.opacity = '1'; bar.style.width = '78%'; }
+  else { bar.style.width = '100%'; setTimeout(function(){ bar.style.opacity='0'; bar.style.width='0'; }, 220); }
+}
+
+function extractPageFromHref_(href) {
+  try {
+    var u = href.charAt(0) === '?' ? new URL(location.origin + location.pathname + href) : new URL(href, location.href);
+    var page = u.searchParams.get('page');
+    if (!page) return null;
+    var params = {};
+    u.searchParams.forEach(function(v,k){ if (k !== 'page') params[k] = v; });
+    return { page: page, params: params };
+  } catch (_) { return null; }
+}
+
+function replaceAppHtml_(html, page, params, fromCache) {
+  if (!html || !String(html).trim()) throw new Error('Servidor retornou HTML vazio para a página ' + page);
+  var current = document.getElementById('app');
+  if (!current) {
+    current = document.createElement('div');
+    current.id = 'app';
+    document.body.innerHTML = '';
+    document.body.appendChild(current);
+  }
+
+  if (String(html).indexOf('id="app"') >= 0 || String(html).indexOf("id='app'") >= 0) {
+    current.outerHTML = html;
+  } else {
+    current.innerHTML = html;
+  }
+
+  window.REPOSITORY_CONFIG = window.REPOSITORY_CONFIG || {};
+  window.REPOSITORY_CONFIG.page = page;
+  window.REPOSITORY_CONFIG.params = params || {};
+  executeScriptsIn_(document.getElementById('app') || document.body);
+  try { hydrateShellUser_(); applyRoleVisibility_(); } catch(_) {}
+  updateActiveNavigation_(page);
+  normalizePageLinks();
+  try { window.scrollTo({ top: 0, behavior: fromCache ? 'auto' : 'smooth' }); } catch(_) { window.scrollTo(0,0); }
+}
+
+function executeScriptsIn_(root) {
+  var scripts = Array.prototype.slice.call(root.querySelectorAll('script'));
+  scripts.forEach(function(oldScript) {
+    var s = document.createElement('script');
+    for (var i = 0; i < oldScript.attributes.length; i++) {
+      var a = oldScript.attributes[i];
+      s.setAttribute(a.name, a.value);
+    }
+    if (oldScript.src) s.src = oldScript.src;
+    else s.text = oldScript.textContent || '';
+    oldScript.parentNode.replaceChild(s, oldScript);
+  });
+}
+
+function updateActiveNavigation_(page) {
+  document.querySelectorAll('.nav-item,.bn-item').forEach(function(a){
+    var info = extractPageFromHref_(a.getAttribute('href') || '');
+    var active = info && info.page === page;
+    a.classList.toggle('active', !!active);
+    a.querySelectorAll('.material-symbols-outlined').forEach(function(ic){ ic.classList.toggle('icon-fill', !!active); });
+  });
+}
+
+function navigate(page, params, options) {
+  options = options || {};
+  params = params || {};
+  page = String(page || 'dashboard').toLowerCase();
+
+  if (page === 'logout') { handleLogout(); return; }
+
+  // Login continua funcionando via SPA, mas se algo estranho ocorrer ele cai para navegação normal.
+  var url = buildPageUrl(page, params);
+  try { history.pushState({ page: page, params: params }, '', url); } catch (_) {}
+
+  var cached = !options.force && getCachedPage_(page, params);
+  if (cached) {
+    try { replaceAppHtml_(cached.html, page, params, true); }
+    catch (e) { console.error(e); }
+  }
+
+  if (typeof google === 'undefined' || !google.script || !google.script.run) {
+    hardNavigate(page, params);
+    return;
+  }
+
+  if (!cached) setSpaBusy_(true);
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setSpaBusy_(false);
+      if (!res || !res.ok || !res.html) {
+        var msg = (res && (res.error || res.message)) || 'Resposta inválida ao carregar página.';
+        if (cached) showToast('Falha ao atualizar página em segundo plano: ' + msg, 'error', 7000);
+        else showFatalScreen('Erro ao carregar página', page, msg, 'Resposta inválida do servidor. Consulte os logs do Apps Script.');
+        return;
+      }
+      setCachedPage_(page, params, res.html);
+      replaceAppHtml_(res.html, page, params, false);
+      document.title = res.title || ('Repositório de Estudos — ' + page);
+    })
+    .withFailureHandler(function(err) {
+      setSpaBusy_(false);
+      var msg = (err && err.message) || String(err || 'Erro no google.script.run');
+      if (cached) showToast('Falha ao atualizar página: ' + msg, 'error', 8000);
+      else showFatalScreen('Erro no roteador rápido', page, msg, err && err.stack);
+    })
+    .getSpaPage(page, params, (window.AuthSessionManager && AuthSessionManager.getAccessToken()) || (window.REPOSITORY_SESSION && window.REPOSITORY_SESSION.accessToken) || sessionStorage.getItem('RE_ACCESS_TOKEN') || '');
+}
+
+function normalizePageLinks() {
+  document.querySelectorAll('a[href*="page="]').forEach(function(a){
+    var info = extractPageFromHref_(a.getAttribute('href') || a.href || '');
+    if (!info) return;
+    a.setAttribute('data-spa-link', '1');
+    if (!a.getAttribute('href') || a.getAttribute('href').indexOf('?page=') === -1) a.setAttribute('href', buildPageUrl(info.page, info.params));
+  });
+}
+
+
+function getStoredUserProfile_() {
+  var user = {}, profile = {};
+  try { user = JSON.parse(sessionStorage.getItem('RE_USER') || '{}'); } catch(_) {}
+  try { profile = JSON.parse(sessionStorage.getItem('RE_PROFILE') || '{}'); } catch(_) {}
+  if (window.REPOSITORY_SESSION) {
+    user = Object.assign({}, window.REPOSITORY_SESSION.user || {}, user || {});
+    profile = Object.assign({}, window.REPOSITORY_SESSION.profile || {}, profile || {});
+  }
+  return { user:user || {}, profile:profile || {} };
+}
+function renderShellAvatar_(el, profile, user) {
+  if (!el) return;
+  var name = (profile && profile.display_name) || (user && user.email) || 'U';
+  var url = profile && profile.avatar_url;
+  if (url) el.innerHTML = '<img src="' + escHtml(url) + '" alt="Foto" style="width:100%;height:100%;border-radius:inherit;object-fit:cover">';
+  else el.innerHTML = '<span>' + escHtml(String(name || 'U').trim().charAt(0).toUpperCase() || 'U') + '</span>';
+}
+function hydrateShellUser_() {
+  var ctx = getStoredUserProfile_();
+  var name = ctx.profile.display_name || ctx.user.email || 'Usuário';
+  var role = ctx.profile.role || 'viewer';
+  var nameEl = document.getElementById('sidebarUserName'); if (nameEl) nameEl.textContent = name;
+  var roleEl = document.getElementById('sidebarUserRole'); if (roleEl) roleEl.textContent = role;
+  renderShellAvatar_(document.getElementById('sidebarAvatar'), ctx.profile, ctx.user);
+  renderShellAvatar_(document.getElementById('topbarAvatar'), ctx.profile, ctx.user);
+}
+
+function applyRoleVisibility_() {
+  var ctx = getStoredUserProfile_();
+  var role = String((ctx.profile && ctx.profile.role) || 'viewer').toLowerCase();
+  document.querySelectorAll('[data-admin-only="1"]').forEach(function(el){
+    el.style.display = role === 'admin' ? '' : 'none';
+  });
+}
+
+function toggleMobileMoreMenu(force) {
+  var menu = document.getElementById('mobileMoreMenu');
+  var back = document.getElementById('mobileMoreBackdrop');
+  if (!menu || !back) return;
+  var open = force === undefined ? menu.style.display === 'none' || !menu.style.display : !!force;
+  menu.style.display = open ? 'block' : 'none';
+  back.style.display = open ? 'block' : 'none';
+  document.body.style.overflow = open ? 'hidden' : '';
+  var btn = document.querySelector('.bn-more'); if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) applyRoleVisibility_();
+}
+
+function showToast(message, type, duration) {
+  type     = type     || 'default';
+  duration = duration || 3500;
+  var container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    document.body.appendChild(container);
+  }
+  var el = document.createElement('div');
+  el.className = 'toast ' + (type !== 'default' ? type : '');
+  var icons = { success: 'check_circle', error: 'error', default: 'info' };
+  el.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px">' +
+                 (icons[type] || icons.default) + '</span>' + escHtml(message);
+  container.appendChild(el);
+  setTimeout(function() {
+    el.style.opacity = '0';
+    setTimeout(function() { if (el && el.parentNode) el.remove(); }, 320);
+  }, duration);
+}
+
+function openSidebar() {
+  var s = document.getElementById('sidebar'), o = document.getElementById('sidebarOverlay');
+  if (s) s.classList.add('open');
+  if (o) o.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeSidebar() {
+  var s = document.getElementById('sidebar'), o = document.getElementById('sidebarOverlay');
+  if (s) s.classList.remove('open');
+  if (o) o.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function setBtnLoading(btn, loading, label) {
+  if (!btn) return;
+  if (loading) {
+    btn.disabled = true;
+    btn._origHTML = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner"></span>' + (label || 'Aguarde…');
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = btn._origHTML || label || '';
+  }
+}
+
+function runServer(fnName, args) {
+  return new Promise(function(resolve, reject) {
+    var runner = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
+    if (!runner[fnName]) { reject(new Error('Função Apps Script inexistente: ' + fnName)); return; }
+    if (Array.isArray(args)) runner[fnName].apply(runner, args);
+    else if (args !== undefined) runner[fnName](args);
+    else runner[fnName]();
+  });
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' });
+}
+function fmtSize(bytes) {
+  if (!bytes) return '—';
+  if (bytes < 1024)       return bytes + ' B';
+  if (bytes < 1024*1024)  return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1024/1024).toFixed(1) + ' MB';
+}
+function fileTypeBadge(type) {
+  type = String(type || '').toLowerCase();
+  var map = {
+    book: ['Livro','badge-primary'], article: ['Artigo','badge-secondary'],
+    slide: ['Slide','badge-tertiary'], summary: ['Resumo','badge-secondary'],
+    test: ['Prova','badge-pending'], notes: ['Apostila','badge-approved'],
+    dataset: ['Dataset','badge-archived'], document: ['PDF','badge-primary'],
+    video: ['Vídeo','badge-tertiary'], playlist: ['Playlist','badge-primary'],
+    external_link: ['Link','badge-secondary'], link: ['Link','badge-secondary'],
+    youtube_video: ['YouTube','badge-tertiary'], youtube_playlist: ['Playlist','badge-primary'],
+    other: ['Outro','badge-archived']
+  };
+  var item = map[type] || ['Outro','badge-archived'];
+  return '<span class="badge ' + item[1] + '">' + item[0] + '</span>';
+}
+function isExternalMaterial(f) { return !!(f && f.source_type && f.source_type !== 'drive_file'); }
+function isYouTubeMaterial(f) { return !!(f && (f.source_type === 'youtube_video' || f.source_type === 'youtube_playlist' || f.external_provider === 'youtube')); }
+function materialOpenLabel(f) {
+  if (!f) return 'Abrir';
+  if (f.source_type === 'youtube_video' || f.file_type === 'video') return 'Assistir';
+  if (f.source_type === 'youtube_playlist' || f.file_type === 'playlist') return 'Assistir playlist';
+  return 'Abrir';
+}
+function statusBadge(status) {
+  var map = { approved:'badge-approved', pending:'badge-pending', rejected:'badge-rejected', archived:'badge-archived' };
+  var labels = { approved:'Aprovado', pending:'Pendente', rejected:'Rejeitado', archived:'Arquivado' };
+  return '<span class="badge ' + (map[status]||'badge-archived') + '">' + (labels[status]||status) + '</span>';
+}
+
+function handleLogout() {
+  runServer('logoutUser').finally(function() {
+    try {
+      localStorage.removeItem('RE_AUTH_SESSION_V2');
+      sessionStorage.removeItem('RE_ACCESS_TOKEN');
+      sessionStorage.removeItem('RE_REFRESH_TOKEN');
+      sessionStorage.removeItem('RE_USER');
+      sessionStorage.removeItem('RE_PROFILE');
+      clearPageCache();
+      // Limpar cache de grafo também
+      Object.keys(localStorage).forEach(function(k){
+        if (k.indexOf('RE_SPA_PAGE_') === 0 || k.indexOf('RE_GRAPH_POS_') === 0) {
+          try { localStorage.removeItem(k); } catch(_){}
+        }
+      });
+    } catch (_) {}
+    hardNavigate('login');
+  });
+}
+
+function openModal(id) {
+  var el = document.getElementById(id);
+  if (el) { el.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
+}
+function closeModal(id) {
+  var el = document.getElementById(id);
+  if (el) { el.style.display = 'none'; document.body.style.overflow = ''; }
+}
+
+if (!window.__RE_APP_GLOBAL_LISTENERS__) {
+  window.__RE_APP_GLOBAL_LISTENERS__ = true;
+
+  window.addEventListener('error', function(e) {
+    try {
+      var box = document.getElementById('appFatalError');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'appFatalError';
+        box.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;z-index:999999;background:#ffdad6;color:#93000a;border:1px solid #ba1a1a;border-radius:12px;padding:12px 14px;font:13px/1.4 Inter,Arial,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.18)';
+        document.body.appendChild(box);
+      }
+      box.innerHTML = '<b>Erro no frontend:</b> ' + escHtml(e.message || 'erro desconhecido') + '<br><button onclick="showFatalScreen(\'Erro no frontend\', null, this.parentNode.textContent, null)" style="margin-top:8px">Ver tela de erro</button>';
+    } catch (_) {}
+  });
+  window.addEventListener('unhandledrejection', function(e) {
+    try { showToast('Erro: ' + ((e.reason && e.reason.message) || e.reason || 'promise rejeitada'), 'error', 8000); } catch (_) {}
+  });
+
+  document.addEventListener('click', function(e) {
+    if (e.target && e.target.classList && e.target.classList.contains('modal-backdrop')) {
+      e.target.style.display = 'none';
+      document.body.style.overflow = '';
+      return;
+    }
+    var a = e.target && e.target.closest ? e.target.closest('a[href*="page="]') : null;
+    if (!a) return;
+    if (a.target === '_blank' || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    var info = extractPageFromHref_(a.getAttribute('href') || a.href || '');
+    if (!info) return;
+    e.preventDefault();
+    closeSidebar();
+    toggleMobileMoreMenu(false);
+    navigate(info.page, info.params);
+  });
+
+  window.addEventListener('popstate', function(ev) {
+    var info = extractPageFromHref_(location.href) || { page:'dashboard', params:{} };
+    navigate(info.page, info.params, { force:false });
+  });
+}
+
+onDomReady(function(){
+  normalizePageLinks(); hydrateShellUser_(); applyRoleVisibility_();
+  // Restaurar sessão entre reloads (F5)
+  if (window.AuthSessionManager && typeof AuthSessionManager.restoreOnBoot === 'function') {
+    AuthSessionManager.restoreOnBoot(function(profile) {
+      if (profile) {
+        // Sessão restaurada — sincronizar UI
+        if (window.REPOSITORY_SESSION) {
+          window.REPOSITORY_SESSION.accessToken = AuthSessionManager.getAccessToken();
+          window.REPOSITORY_SESSION.profile = profile;
+        }
+        hydrateShellUser_(); applyRoleVisibility_();
+      }
+      // Rota atual já está carregada pelo servidor (Apps Script SSR via getSpaPage),
+      // então não redirecionar — apenas garantir que o estado de sessão está ok.
+    });
+  }
+});
+</script>

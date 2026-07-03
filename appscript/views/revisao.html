@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?></head>
+<body class="bg-background">
+
+<?!= include('partials/sidebar'); ?>
+<div class="main-content">
+  <?!= include('partials/topbar'); ?>
+
+  <main class="page-content">
+    <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div>
+        <h2>Revisão e Aprovação</h2>
+        <p>Aprove ou reprove materiais enviados e revise sugestões automáticas de metadados.</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-secondary" onclick="navigate('biblioteca')" style="border-radius:100px;padding:8px 18px">
+          <span class="material-symbols-outlined" style="font-size:18px">local_library</span>
+          Biblioteca
+        </button>
+        <button class="btn-primary" id="refreshReviewBtn" onclick="loadReviewData(true)" style="border-radius:100px;padding:8px 20px">
+          <span class="material-symbols-outlined" style="font-size:18px">refresh</span>
+          Atualizar
+        </button>
+      </div>
+    </div>
+
+    <div id="reviewError" style="display:none;background:#ffdad6;border:1px solid #ba1a1a;color:#93000a;border-radius:16px;padding:16px;margin-bottom:16px"></div>
+
+    <div class="stats-grid" style="margin-bottom:20px">
+      <div class="stat-card compact"><div><div class="stat-label">Materiais pendentes</div><div id="totalPendingMaterials" class="stat-value">—</div></div></div>
+      <div class="stat-card compact"><div><div class="stat-label">Sugestões IA</div><div id="totalPendingSuggestions" class="stat-value">—</div></div></div>
+      <div class="stat-card compact"><div><div class="stat-label">Permissão</div><div id="reviewRole" class="stat-value" style="font-size:18px">—</div></div></div>
+    </div>
+
+    <section class="settings-card" style="margin-bottom:18px">
+      <div class="section-header review-section-header">
+        <div>
+          <h3>Materiais aguardando aprovação</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-top:4px">Arquivos com status pendente. Aqui aparece a ação real de aprovar ou reprovar.</p>
+        </div>
+        <button class="btn-secondary" onclick="loadPendingMaterials()" style="border-radius:100px;padding:7px 14px;font-size:13px">
+          <span class="material-symbols-outlined" style="font-size:17px">refresh</span> Recarregar
+        </button>
+      </div>
+      <div id="pendingMaterialsList" style="display:flex;flex-direction:column;gap:12px">
+        <div class="skeleton" style="height:120px;border-radius:16px"></div>
+        <div class="skeleton" style="height:120px;border-radius:16px"></div>
+      </div>
+      <div id="emptyPendingMaterials" class="empty-state" style="display:none;padding:34px 16px">
+        <span class="material-symbols-outlined">task_alt</span>
+        <h3 style="font-size:17px;font-weight:600;color:var(--text-primary);margin:8px 0 4px">Nenhum material pendente</h3>
+        <p>Quando alguém enviar um livro, artigo, PDF ou slide pendente, ele aparecerá aqui.</p>
+      </div>
+    </section>
+
+    <section class="settings-card">
+      <div class="section-header review-section-header">
+        <div>
+          <h3>Sugestões de nome/metadados</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-top:4px">Aprove, edite ou rejeite sugestões automáticas sem mexer no arquivo físico duplicado.</p>
+        </div>
+        <button class="btn-primary" id="approveAllBtn" onclick="approveAllSuggestions()" style="border-radius:100px;padding:7px 14px;font-size:13px">
+          <span class="material-symbols-outlined icon-fill" style="font-size:17px">done_all</span> Aprovar sugestões
+        </button>
+      </div>
+      <div id="suggestionsList" style="display:flex;flex-direction:column;gap:12px">
+        <div class="skeleton" style="height:130px;border-radius:16px"></div>
+        <div class="skeleton" style="height:130px;border-radius:16px"></div>
+      </div>
+      <div id="emptySuggestions" class="empty-state" style="display:none;padding:34px 16px">
+        <span class="material-symbols-outlined">task_alt</span>
+        <h3 style="font-size:17px;font-weight:600;color:var(--text-primary);margin:8px 0 4px">Sem sugestões pendentes</h3>
+        <p>As sugestões de IA/normalização aparecerão aqui quando existirem.</p>
+      </div>
+    </section>
+
+    <div class="safe-bottom-pad"></div>
+  </main>
+</div>
+
+<?!= include('partials/bottomnav'); ?>
+<?!= include('scripts/app'); ?>
+
+<script>
+var pendingMaterials = [];
+var suggestions = [];
+var canApproveMaterials = false;
+
+onDomReady(function() { loadReviewData(false); });
+function reviewToken(){ return sessionStorage.getItem('RE_ACCESS_TOKEN') || ''; }
+
+function showReviewError(title, action, message, stack) {
+  var box = document.getElementById('reviewError');
+  box.style.display = 'block';
+  box.innerHTML = '<b>' + escHtml(title || 'Erro') + '</b><br>' +
+    '<span>Ação: ' + escHtml(action || '-') + '</span><br>' +
+    '<span>' + escHtml(message || 'Erro desconhecido') + '</span>' +
+    (stack ? '<pre style="white-space:pre-wrap;margin-top:8px">' + escHtml(String(stack).split('\n').slice(0,8).join('\n')) + '</pre>' : '') +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
+    '<button class="btn-secondary" onclick="navigate(\'biblioteca\')">Ir para biblioteca</button>' +
+    '<button class="btn-primary" onclick="loadReviewData(true)" style="flex:0 0 auto">Tentar novamente</button></div>';
+}
+
+function loadReviewData(showMsg) {
+  document.getElementById('reviewError').style.display = 'none';
+  loadPendingMaterials();
+  loadSuggestions();
+  if (showMsg) showToast('Revisão atualizada.', 'success');
+}
+
+function loadPendingMaterials() {
+  var list = document.getElementById('pendingMaterialsList');
+  list.style.display = 'flex';
+  list.innerHTML = '<div class="skeleton" style="height:120px;border-radius:16px"></div><div class="skeleton" style="height:120px;border-radius:16px"></div>';
+  document.getElementById('emptyPendingMaterials').style.display = 'none';
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res || !res.ok) {
+        pendingMaterials = [];
+        document.getElementById('totalPendingMaterials').textContent = '0';
+        list.innerHTML = '';
+        document.getElementById('emptyPendingMaterials').style.display = 'flex';
+        showReviewError('Falha ao carregar pendentes', 'getPendingReviewMaterials', (res && res.error) || 'Resposta inválida.', res && res.stack);
+        return;
+      }
+      pendingMaterials = res.materials || [];
+      canApproveMaterials = !!res.canApprove;
+      document.getElementById('reviewRole').textContent = res.role || (canApproveMaterials ? 'editor/admin' : 'viewer');
+      document.getElementById('totalPendingMaterials').textContent = pendingMaterials.length;
+      renderPendingMaterials();
+    })
+    .withFailureHandler(function(e){
+      list.innerHTML = '';
+      document.getElementById('emptyPendingMaterials').style.display = 'flex';
+      showReviewError('Erro no servidor', 'getPendingReviewMaterials', (e && e.message) || String(e), e && e.stack);
+    })
+    .getPendingReviewMaterials(reviewToken());
+}
+
+function renderPendingMaterials() {
+  var list = document.getElementById('pendingMaterialsList');
+  if (!pendingMaterials.length) {
+    list.innerHTML = '';
+    document.getElementById('emptyPendingMaterials').style.display = 'flex';
+    return;
+  }
+  document.getElementById('emptyPendingMaterials').style.display = 'none';
+  list.innerHTML = pendingMaterials.map(function(f){ return renderPendingMaterialCard(f); }).join('');
+}
+
+function fileTitle_(f){ return f.final_name || f.suggested_name || f.original_name || 'Material sem nome'; }
+function renderPendingMaterialCard(f) {
+  var cat = f.categories && f.categories.name ? f.categories.name : '';
+  var sub = f.subjects && f.subjects.name ? f.subjects.name : '';
+  var actions = canApproveMaterials
+    ? '<button class="btn-primary review-action-btn" onclick="approvePendingMaterial(\'' + escHtml(f.id) + '\')"><span class="material-symbols-outlined" style="font-size:16px">check</span> Aprovar</button>' +
+      '<button class="btn-danger review-action-btn" onclick="rejectPendingMaterial(\'' + escHtml(f.id) + '\')"><span class="material-symbols-outlined" style="font-size:16px">close</span> Reprovar</button>'
+    : '<span class="badge badge-pending">Aguardando editor/admin</span>';
+  return '<article class="review-card pending-material-card" id="mat_' + escHtml(f.id) + '">' +
+    '<div class="review-card-grid" style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">' +
+      '<div style="flex:1;min-width:220px">' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' + fileTypeBadge(f.file_type) + statusBadge(f.status) + (f.visibility ? '<span class="badge badge-secondary">' + escHtml(f.visibility) + '</span>' : '') + '</div>' +
+        '<h4 style="font-size:16px;font-weight:800;color:var(--text-primary);margin:0 0 4px;word-break:break-word">' + escHtml(fileTitle_(f)) + '</h4>' +
+        '<p style="font-size:12px;color:var(--text-muted);margin:0 0 8px;word-break:break-word">Original: ' + escHtml(f.original_name || '—') + '</p>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;font-size:12px;color:#434655">' +
+          (cat ? '<span>Área: <b>' + escHtml(cat) + '</b></span>' : '') +
+          (sub ? '<span>Assunto: <b>' + escHtml(sub) + '</b></span>' : '') +
+          (f.author ? '<span>Autor: <b>' + escHtml(f.author) + '</b></span>' : '') +
+          (f.year ? '<span>Ano: <b>' + escHtml(f.year) + '</b></span>' : '') +
+          '<span>Enviado: <b>' + escHtml(fmtDate(f.created_at)) + '</b></span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="review-actions" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:center">' +
+        '<button class="btn-secondary review-action-btn" onclick="navigate(\'detalhe\',{id:\'' + escHtml(f.id) + '\'})"><span class="material-symbols-outlined" style="font-size:16px">visibility</span> Abrir</button>' + actions +
+      '</div>' +
+    '</div>' +
+  '</article>';
+}
+
+function approvePendingMaterial(id) {
+  var card = document.getElementById('mat_' + id);
+  if (card) { card.style.opacity = '.55'; card.style.pointerEvents = 'none'; }
+  google.script.run.withSuccessHandler(function(res){
+    if (res && res.ok) {
+      showToast('Material aprovado.', 'success');
+      pendingMaterials = pendingMaterials.filter(function(f){ return f.id !== id; });
+      document.getElementById('totalPendingMaterials').textContent = pendingMaterials.length;
+      renderPendingMaterials();
+      clearPageCache();
+    } else {
+      if (card) { card.style.opacity = '1'; card.style.pointerEvents = ''; }
+      showReviewError('Erro ao aprovar material', 'approveMaterial', (res && res.error) || 'Erro desconhecido.', res && res.stack);
+    }
+  }).withFailureHandler(function(e){
+    if (card) { card.style.opacity = '1'; card.style.pointerEvents = ''; }
+    showReviewError('Erro no servidor', 'approveMaterial', (e && e.message) || String(e), e && e.stack);
+  }).approveMaterial(id, reviewToken());
+}
+
+function rejectPendingMaterial(id) {
+  var reason = prompt('Motivo da reprovação (opcional):') || '';
+  var card = document.getElementById('mat_' + id);
+  if (card) { card.style.opacity = '.55'; card.style.pointerEvents = 'none'; }
+  google.script.run.withSuccessHandler(function(res){
+    if (res && res.ok) {
+      showToast('Material reprovado.', 'default');
+      pendingMaterials = pendingMaterials.filter(function(f){ return f.id !== id; });
+      document.getElementById('totalPendingMaterials').textContent = pendingMaterials.length;
+      renderPendingMaterials();
+      clearPageCache();
+    } else {
+      if (card) { card.style.opacity = '1'; card.style.pointerEvents = ''; }
+      showReviewError('Erro ao reprovar material', 'rejectMaterial', (res && res.error) || 'Erro desconhecido.', res && res.stack);
+    }
+  }).withFailureHandler(function(e){
+    if (card) { card.style.opacity = '1'; card.style.pointerEvents = ''; }
+    showReviewError('Erro no servidor', 'rejectMaterial', (e && e.message) || String(e), e && e.stack);
+  }).rejectMaterial(id, reason, reviewToken());
+}
+
+function loadSuggestions() {
+  var list = document.getElementById('suggestionsList');
+  list.style.display = 'flex';
+  list.innerHTML = '<div class="skeleton" style="height:130px;border-radius:16px"></div><div class="skeleton" style="height:130px;border-radius:16px"></div>';
+  document.getElementById('emptySuggestions').style.display = 'none';
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res || !res.ok) {
+        suggestions = [];
+        document.getElementById('totalPendingSuggestions').textContent = '0';
+        list.innerHTML = '';
+        document.getElementById('emptySuggestions').style.display = 'flex';
+        return;
+      }
+      suggestions = res.suggestions || [];
+      document.getElementById('totalPendingSuggestions').textContent = suggestions.length;
+      renderSuggestions();
+    })
+    .withFailureHandler(function(e){
+      list.innerHTML = '';
+      document.getElementById('emptySuggestions').style.display = 'flex';
+      showReviewError('Erro no servidor', 'getPendingSuggestions', (e && e.message) || String(e), e && e.stack);
+    })
+    .getPendingSuggestions(reviewToken());
+}
+
+function renderSuggestions() {
+  var list = document.getElementById('suggestionsList');
+  if (!suggestions.length) {
+    list.innerHTML = '';
+    document.getElementById('emptySuggestions').style.display = 'flex';
+    document.getElementById('approveAllBtn').disabled = true;
+    return;
+  }
+  document.getElementById('approveAllBtn').disabled = false;
+  document.getElementById('emptySuggestions').style.display = 'none';
+  list.innerHTML = suggestions.map(function(s) {
+    return '<article class="review-card" id="sug_' + escHtml(s.id) + '">' +
+      '<div style="display:flex;flex-wrap:wrap" class="review-card-grid">' +
+        '<div class="review-col review-col-original" style="flex:1;min-width:240px">' +
+          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:12px"><span class="badge badge-archived">Original</span><span class="material-symbols-outlined" style="font-size:16px;color:#737686">attachment</span></div>' +
+          '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:700;letter-spacing:.04em;margin-bottom:4px">Nome atual</div>' +
+          '<div style="font-size:16px;font-weight:600;color:var(--text-primary);word-break:break-word">' + escHtml(s.original_name || (s.study_files && s.study_files.original_name) || '—') + '</div>' +
+        '</div>' +
+        '<div class="review-col review-col-suggestion" style="flex:1;min-width:240px">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">' +
+            '<div style="display:flex;align-items:center;gap:6px"><span class="badge badge-primary">Sugestão</span><span class="material-symbols-outlined icon-fill" style="font-size:16px;color:#004ac6">auto_awesome</span></div>' +
+            '<div class="review-actions" style="display:flex;gap:6px;flex-wrap:wrap">' +
+              '<button class="btn-danger review-action-btn" onclick="rejectSug(\'' + escHtml(s.id) + '\')" title="Rejeitar"><span class="material-symbols-outlined" style="font-size:16px">close</span> Rejeitar</button>' +
+              '<button class="btn-secondary review-action-btn" onclick="editSug(\'' + escHtml(s.id) + '\',this)" title="Editar"><span class="material-symbols-outlined" style="font-size:16px">edit</span> Editar</button>' +
+              '<button class="btn-primary review-action-btn" onclick="approveSug(\'' + escHtml(s.id) + '\')"><span class="material-symbols-outlined icon-fill" style="font-size:15px">check</span> Aprovar</button>' +
+            '</div>' +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:700;letter-spacing:.04em;margin-bottom:4px">Nome sugerido</div>' +
+          '<div id="sugName_' + escHtml(s.id) + '" style="font-size:16px;font-weight:700;color:var(--primary);word-break:break-word">' + escHtml(s.suggested_name) + '</div>' +
+          '<div style="background:#d0e1fb;border-radius:8px;padding:8px 12px;margin-top:10px;font-size:12px;color:#38485d">' +
+            '<span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px">info</span>' +
+            escHtml(s.reason || 'Sugestão automática.') + ' · Confiança: ' + Math.round((s.confidence||0)*100) + '%' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</article>';
+  }).join('');
+}
+
+function approveSug(id) {
+  var card = document.getElementById('sug_' + id);
+  if (card) { card.style.opacity = '.4'; card.style.pointerEvents = 'none'; }
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) {
+        showToast('Sugestão aprovada e material aprovado.', 'success');
+        removeSuggestion(id);
+        clearPageCache();
+      } else {
+        if (card) { card.style.opacity = '1'; card.style.pointerEvents = ''; }
+        showReviewError('Erro ao aprovar sugestão', 'approveSuggestion', (res && res.error) || 'Erro ao aprovar.', res && res.stack);
+      }
+    })
+    .withFailureHandler(function(e) {
+      if (card) { card.style.opacity = '1'; card.style.pointerEvents = ''; }
+      showReviewError('Erro no servidor', 'approveSuggestion', (e && e.message) || String(e), e && e.stack);
+    })
+    .approveSuggestion(id, reviewToken());
+}
+
+function rejectSug(id) {
+  var card = document.getElementById('sug_' + id);
+  if (card) { card.style.opacity = '.4'; card.style.pointerEvents = 'none'; }
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) {
+        showToast('Sugestão rejeitada.', 'default');
+        removeSuggestion(id);
+      } else {
+        if (card) { card.style.opacity = '1'; card.style.pointerEvents = ''; }
+        showReviewError('Erro ao rejeitar sugestão', 'rejectSuggestion', (res && res.error) || 'Erro ao rejeitar.', res && res.stack);
+      }
+    })
+    .withFailureHandler(function(e){
+      if (card) { card.style.opacity = '1'; card.style.pointerEvents = ''; }
+      showReviewError('Erro no servidor', 'rejectSuggestion', (e && e.message) || String(e), e && e.stack);
+    })
+    .rejectSuggestion(id, reviewToken());
+}
+
+function editSug(id, btn) {
+  var nameEl = document.getElementById('sugName_' + id);
+  var current = nameEl.textContent;
+  var inp = document.createElement('input');
+  inp.type = 'text'; inp.value = current;
+  inp.className = 'form-control';
+  inp.style.cssText = 'font-size:16px;font-weight:700;color:var(--primary);background:#fff';
+  nameEl.replaceWith(inp);
+  inp.focus();
+  inp.id = 'sugName_' + id;
+  btn.innerHTML = '<span class="material-symbols-outlined icon-fill" style="font-size:16px">check</span> Salvar';
+  btn.onclick = function() { finishEdit(id, inp, btn, current); };
+}
+
+function finishEdit(id, inp, btn, original) {
+  var newName = inp.value.trim() || original;
+  var span = document.createElement('div');
+  span.id = 'sugName_' + id;
+  span.style.cssText = 'font-size:16px;font-weight:700;color:var(--primary);word-break:break-word';
+  span.textContent = newName;
+  inp.replaceWith(span);
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px">edit</span> Editar';
+  btn.onclick = function(){ editSug(id, btn); };
+  var sug = suggestions.find(function(x){ return x.id === id; });
+  if (sug) sug.suggested_name = newName;
+  showToast('Nome ajustado visualmente. Ao aprovar, a sugestão salva será a registrada no banco atual.', 'default', 6000);
+}
+
+function removeSuggestion(id) {
+  suggestions = suggestions.filter(function(s){ return s.id !== id; });
+  document.getElementById('totalPendingSuggestions').textContent = suggestions.length;
+  renderSuggestions();
+  loadPendingMaterials();
+}
+
+function approveAllSuggestions() {
+  if (!suggestions.length) return;
+  if (!confirm('Aprovar todas as sugestões pendentes listadas?')) return;
+  var ids = suggestions.map(function(s){ return s.id; });
+  var done = 0;
+  function next() {
+    if (!ids.length) { showToast(done + ' sugestões aprovadas.', 'success'); loadReviewData(false); return; }
+    var id = ids.shift();
+    google.script.run.withSuccessHandler(function(res){ if(res&&res.ok) done++; next(); })
+      .withFailureHandler(function(){ next(); })
+      .approveSuggestion(id, reviewToken());
+  }
+  next();
+}
+</script>
+</body>
+</html>

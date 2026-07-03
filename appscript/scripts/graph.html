@@ -1,0 +1,737 @@
+<script>
+// ============================================================
+// GraphEngine v4 — SVG puro, drag robusto, trilhas recolhidas,
+// criar relação por arraste, expandir/recolher trilha,
+// posições salvas em localStorage.
+// ============================================================
+window.GRAPH_RENDERER = (function(){
+
+  // ── Constantes ──────────────────────────────────────────
+  var NODE_R    = 28;   // raio padrão do nó
+  var NODE_R_PATH = 34; // trilhas são maiores
+  var LABEL_MAX = 28;
+  var FORCE_ITER = 80;  // iterações de repulsão
+
+  var TYPE_LABELS = {
+    material:'Material', path:'Trilha', category:'Categoria',
+    subject:'Assunto', tag:'Tag', topic:'Tópico'
+  };
+  var TYPE_ICONS = {
+    material:'description', path:'route', category:'category',
+    subject:'school', tag:'tag', topic:'bubble_chart'
+  };
+  var REL_LABELS = {
+    prerequisite:'Pré-requisito', recommended_after:'Recomendado depois',
+    related:'Relacionado', same_author:'Mesmo autor',
+    same_category:'Mesma categoria', same_subject:'Mesmo assunto',
+    criticizes:'Critica', explains:'Explica', depends_on:'Depende de',
+    part_of:'Parte de', path_contains:'Contém na trilha',
+    path_prerequisite:'Trilha pré-requisito', path_continuation:'Continuação',
+    complementary:'Complementar', required:'Obrigatório',
+    optional:'Opcional', custom:'Personalizada'
+  };
+
+  // ── Estado global por container ──────────────────────────
+  // Não recriar objeto a cada render — preservar tx/ty/scale entre renders
+  var _states = {};    // containerId → state
+  var _prepared = {};  // containerId → { nodes, edges }
+  var _options  = {};  // containerId → options
+  // Nós de trilha expandidos
+  var _expanded = {};  // pathId → bool
+  // Posições salvas
+  var POS_KEY = 'RE_GRAPH_POS_';
+  var _remotePositions = {};  // scopeKey → { nodeKey:{x,y} }
+  var _remoteLoaded = {};     // scopeKey → bool
+  var _remoteLoading = {};    // scopeKey → bool
+
+  function _scopeKeyFromParts(scope, scopeId){
+    scope = String(scope || 'general');
+    scopeId = String(scopeId || '');
+    return scope === 'learning_path' ? ('learning_path:' + scopeId) : 'general';
+  }
+  function _scopeFromKey(scopeKey){
+    scopeKey = String(scopeKey || 'general');
+    if(scopeKey.indexOf('learning_path:') === 0) return 'learning_path';
+    return 'general';
+  }
+  function _scopeIdFromKey(scopeKey){
+    scopeKey = String(scopeKey || 'general');
+    if(scopeKey.indexOf('learning_path:') === 0) return scopeKey.substring('learning_path:'.length);
+    return '';
+  }
+
+  // ── Utils ────────────────────────────────────────────────
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function escAttr(s){ return esc(s); }
+  try {
+    if (typeof window.escHtml !== 'function') window.escHtml = esc;
+    if (typeof window.escAttr !== 'function') window.escAttr = escAttr;
+  } catch(_) {}
+  function trunc(s,n){ s=String(s==null?'':s); return s.length>n?s.slice(0,n-1)+'…':s; }
+  function safeId(k){ return String(k||'').replace(/[^a-zA-Z0-9_-]/g,'_'); }
+  function nodeR(n){ return n && n.type==='path' ? NODE_R_PATH : NODE_R; }
+  function relationLabel(r){ return REL_LABELS[r]||r||'Relacionado'; }
+  function directionLabel(d){ return d==='undirected'?'Não direcional':'Direcional'; }
+  function nodeTypeLabel(t){ return TYPE_LABELS[t]||t||'Nó'; }
+
+  // ── Posições salvas ──────────────────────────────────────
+  function _posKey(scopeKey){ return POS_KEY + (scopeKey||'general'); }
+  function _loadLocalPositions(scopeKey){
+    try { return JSON.parse(localStorage.getItem(_posKey(scopeKey))||'{}'); } catch(_){ return {}; }
+  }
+  function _loadPositions(scopeKey){
+    var local = _loadLocalPositions(scopeKey);
+    var remote = _remotePositions[scopeKey] || {};
+    // Remoto tem prioridade para manter o mesmo layout entre PCs.
+    var merged = {};
+    Object.keys(local).forEach(function(k){ merged[k]=local[k]; });
+    Object.keys(remote).forEach(function(k){ merged[k]=remote[k]; });
+    return merged;
+  }
+  function _saveLocalPositions(scopeKey, nodes){
+    var pos={};
+    nodes.forEach(function(n){ pos[n.key]={x:n.x, y:n.y}; });
+    try { localStorage.setItem(_posKey(scopeKey), JSON.stringify(pos)); } catch(_){}
+  }
+  function _positionsPayload(nodes){
+    return (nodes||[]).map(function(n){
+      return { nodeType:n.type, nodeId:n.id, x:Number(n.x), y:Number(n.y) };
+    }).filter(function(p){ return p.nodeType && p.nodeId && isFinite(p.x) && isFinite(p.y); });
+  }
+  function _remoteLoad(scopeKey, opts, after){
+    opts = opts || {};
+    if(_remoteLoaded[scopeKey] || _remoteLoading[scopeKey]) return;
+    if(!opts.accessToken || !(window.google && google.script && google.script.run)) return;
+    _remoteLoading[scopeKey]=true;
+    google.script.run
+      .withSuccessHandler(function(res){
+        _remoteLoading[scopeKey]=false;
+        _remoteLoaded[scopeKey]=true;
+        var map={};
+        if(res && res.ok && res.positions){
+          res.positions.forEach(function(p){
+            var key=p.key || ((p.nodeType||p.node_type)+':'+(p.nodeId||p.node_id));
+            if(key && isFinite(Number(p.x)) && isFinite(Number(p.y))) map[key]={x:Number(p.x), y:Number(p.y), remote:true};
+          });
+        }
+        _remotePositions[scopeKey]=map;
+        if(typeof after === 'function') after();
+      })
+      .withFailureHandler(function(){ _remoteLoading[scopeKey]=false; _remoteLoaded[scopeKey]=true; })
+      .getGraphNodePositions({
+        accessToken:opts.accessToken,
+        graphScope:_scopeFromKey(scopeKey),
+        scopeId:_scopeIdFromKey(scopeKey)
+      });
+  }
+  function _saveRemotePositions(scopeKey, nodes, opts){
+    opts = opts || {};
+    if(!opts.accessToken || !(window.google && google.script && google.script.run)) return;
+    var positions=_positionsPayload(nodes);
+    if(!positions.length) return;
+    google.script.run
+      .withSuccessHandler(function(res){
+        if(res && res.ok){
+          var map={};
+          positions.forEach(function(p){ map[p.nodeType+':'+p.nodeId]={x:p.x,y:p.y,remote:true}; });
+          _remotePositions[scopeKey]=map;
+          _remoteLoaded[scopeKey]=true;
+        }
+      })
+      .withFailureHandler(function(){})
+      .saveGraphNodePositions({
+        accessToken:opts.accessToken,
+        graphScope:_scopeFromKey(scopeKey),
+        scopeId:_scopeIdFromKey(scopeKey),
+        positions:positions
+      });
+  }
+  var _savePosTimer = {};
+  function _scheduleSave(scopeKey, nodes, opts){
+    clearTimeout(_savePosTimer[scopeKey]);
+    _savePosTimer[scopeKey] = setTimeout(function(){
+      _saveLocalPositions(scopeKey, nodes);
+      _saveRemotePositions(scopeKey, nodes, opts || {});
+    }, 650);
+  }
+
+  // ── Filtrar ──────────────────────────────────────────────
+  function prepare(nodes, edges, filters){
+    filters = filters||{};
+    var typeF=filters.types||{}, relF=filters.relations||{}, dirF=filters.directions||{};
+    var pathF=filters.paths||null; // array de pathIds selecionados, null = todos
+    var pathsOnly=!!filters.pathsOnly; // grafo geral: começar só com trilhas
+    var expandedPaths=filters.expandedPaths||[]; // materiais só aparecem quando trilha está expandida
+    var showContext=!!filters.showContext; // categorias/tags/tópicos só quando ativado
+    var q=String(filters.q||'').toLowerCase().trim();
+    var selectedPathSet={};
+    if(pathF&&pathF.length) pathF.forEach(function(pid){ selectedPathSet[String(pid)]=true; });
+    var expandedSet={};
+    expandedPaths.forEach(function(pid){ expandedSet[String(pid)]=true; });
+    var nmap={};
+
+    function pathAllowed(pathId){
+      if(!pathF || !pathF.length) return true;
+      return !!selectedPathSet[String(pathId)];
+    }
+
+    (nodes||[]).forEach(function(n){
+      var ok = typeF[n.type]!==false;
+      var meta=n.meta||{};
+      if(ok && pathsOnly){
+        if(n.type==='path') ok=pathAllowed(n.id);
+        else if(n.type==='material') { var pids=meta._pathIds || (meta._pathId?[meta._pathId]:[]); ok=pids.some(function(pid){ return expandedSet[String(pid)] && pathAllowed(pid); }); }
+        else ok=showContext;
+      } else if(ok && pathF && pathF.length && n.type==='material'){
+        var pids2=meta._pathIds || (meta._pathId?[meta._pathId]:[]); ok = pathF.some(function(pid){ return pids2.map(String).indexOf(String(pid))!==-1; });
+      }
+      if(ok && q && String(n.label||'').toLowerCase().indexOf(q)===-1) {
+        // No grafo geral recolhido, ao expandir uma trilha filtrada pelo nome,
+        // manter os materiais internos visíveis mesmo que o título do material não bata com a busca.
+        if (!(pathsOnly && n.type==='material')) ok=false;
+      }
+      if(ok) nmap[n.key]=Object.assign({},n);
+    });
+
+    // Sempre incluir os nós de trilha selecionados quando houver filtro por trilha.
+    if(pathF&&pathF.length){
+      (nodes||[]).filter(function(n){ return n.type==='path'&&pathF.map(String).indexOf(String(n.id))!==-1; }).forEach(function(n){
+        if(!nmap[n.key]) nmap[n.key]=Object.assign({},n);
+      });
+    }
+
+    var outEdges=(edges||[]).filter(function(e){
+      if(!nmap[e.source_key]||!nmap[e.target_key]) return false;
+      if(relF[e.relation_type]===false) return false;
+      if(dirF[e.direction||'directed']===false) return false;
+      // No modo geral recolhido, esconder vínculos internos quando a trilha não está expandida.
+      if(pathsOnly && e.generated && e.path_id && !expandedSet[String(e.path_id)]) return false;
+      return true;
+    });
+    return { nodes:Object.values(nmap), edges:outEdges };
+  }
+
+  // ── Layout melhorado ─────────────────────────────────────
+  function layout(nodes, edges, width, height, scopeKey){
+    width  = Math.max(width ||900, 400);
+    height = Math.max(height||600, 340);
+    var cx=width/2, cy=height/2;
+    var savedPos = _loadPositions(scopeKey||'general');
+
+    // Classificar por tipo
+    var byType={};
+    nodes.forEach(function(n){ (byType[n.type]||(byType[n.type]=[])).push(n); });
+    var paths    = byType.path     || [];
+    var mats     = (byType.material || []).slice().sort(function(a,b){ return Number((a.meta&&a.meta.path_position)||0)-Number((b.meta&&b.meta.path_position)||0); });
+    var cats     = byType.category || [];
+    var subjects = byType.subject  || [];
+    var tags     = byType.tag      || [];
+    var topics   = byType.topic    || [];
+
+    var positioned={};
+
+    // Restaurar posições salvas
+    nodes.forEach(function(n){
+      if(savedPos[n.key]){
+        positioned[n.key]={ x:savedPos[n.key].x, y:savedPos[n.key].y, pinned:true };
+      }
+    });
+
+    var isSinglePath = paths.length===1 && !savedPos[paths[0]&&paths[0].key];
+
+    // Layout sequencial para trilha única
+    if(isSinglePath){
+      var p=paths[0];
+      if(!positioned[p.key]) positioned[p.key]={x:cx, y:80};
+      // Materiais em sequência horizontal
+      var spacing = Math.min(180, (width-120)/Math.max(mats.length,1));
+      var startX  = cx - (mats.length-1)*spacing/2;
+      mats.forEach(function(m,i){
+        if(!positioned[m.key]) positioned[m.key]={ x:startX+i*spacing, y:cy };
+      });
+      // Categorias/assuntos abaixo
+      var sec=[].concat(cats,subjects,tags,topics);
+      sec.forEach(function(n,i){
+        if(!positioned[n.key]) positioned[n.key]={ x:80+i*Math.min(160,(width-100)/Math.max(sec.length,1)), y:height-80 };
+      });
+    } else {
+      // Layout radial: trilhas no centro, aros concêntricos
+      var ringR0 = Math.min(width,height)*0.12;
+      var ringStep = Math.min(130, Math.min(width,height)*0.17);
+
+      // 1. Posicionar trilhas em anel interno
+      paths.forEach(function(n,i){
+        if(positioned[n.key]) return;
+        var a=Math.PI*2*i/Math.max(paths.length,1)-Math.PI/2;
+        var r=paths.length===1?0:ringR0;
+        positioned[n.key]={x:cx+Math.cos(a)*r, y:cy+Math.sin(a)*r};
+      });
+      // 2. Materiais em anel médio
+      _ringLayout(mats,positioned,cx,cy,ringR0+ringStep*1.2,width,height);
+      // 3. Categorias/assuntos/tags em anel externo
+      var outer=[].concat(cats,subjects,tags,topics);
+      _ringLayout(outer,positioned,cx,cy,ringR0+ringStep*2.4,width,height);
+    }
+
+    // Garantir que todos têm posição
+    nodes.forEach(function(n){
+      if(!positioned[n.key]) positioned[n.key]={x:cx+Math.random()*80-40, y:cy+Math.random()*80-40};
+    });
+
+    // Repulsão entre nós (evitar sobreposição)
+    for(var iter=0;iter<FORCE_ITER;iter++){
+      nodes.forEach(function(a,i){
+        if(positioned[a.key]&&positioned[a.key].pinned) return;
+        nodes.slice(i+1).forEach(function(b){
+          var pa=positioned[a.key],pb=positioned[b.key]; if(!pa||!pb) return;
+          if(pb.pinned) return;
+          var dx=pb.x-pa.x, dy=pb.y-pa.y, dist=Math.sqrt(dx*dx+dy*dy)||1;
+          var minD=(nodeR(a)+nodeR(b))*2.2;
+          if(dist<minD){
+            var push=(minD-dist)/(iter<20?2:8);
+            var ux=dx/dist, uy=dy/dist;
+            if(!pa.pinned){pa.x-=ux*push; pa.y-=uy*push;}
+            pb.x+=ux*push; pb.y+=uy*push;
+          }
+        });
+      });
+    }
+
+    // Clamp dentro da viewport
+    nodes.forEach(function(n){
+      var p=positioned[n.key]||{x:cx,y:cy};
+      var r=nodeR(n)+10;
+      p.x=Math.max(r,Math.min(width-r,p.x));
+      p.y=Math.max(r+30,Math.min(height-r-30,p.y));
+      n.x=p.x; n.y=p.y;
+    });
+    return nodes;
+  }
+
+  function _ringLayout(arr,positioned,cx,cy,r,width,height){
+    arr.forEach(function(n,i){
+      if(positioned[n.key]) return;
+      var a=Math.PI*2*i/Math.max(arr.length,1)-Math.PI/2;
+      positioned[n.key]={x:cx+Math.cos(a)*r, y:cy+Math.sin(a)*r};
+    });
+  }
+
+  // ── SVG defs ─────────────────────────────────────────────
+  function buildDefs(){
+    var refX = NODE_R_PATH + 10;
+    return '<defs>' +
+      // Aresta normal direcional
+      '<marker id="arr" viewBox="0 0 10 10" refX="'+refX+'" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse" markerUnits="userSpaceOnUse">' +
+        '<path d="M0,0 L10,5 L0,10 Z" class="obs-arrow-fill"/></marker>' +
+      // Aresta selecionada
+      '<marker id="arr-sel" viewBox="0 0 10 10" refX="'+refX+'" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse" markerUnits="userSpaceOnUse">' +
+        '<path d="M0,0 L10,5 L0,10 Z" class="obs-arrow-fill-selected"/></marker>' +
+      // Aresta temporária (criando relação)
+      '<marker id="arr-tmp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse" markerUnits="userSpaceOnUse">' +
+        '<path d="M0,0 L10,5 L0,10 Z" fill="#004ac6" opacity=".8"/></marker>' +
+    '</defs>';
+  }
+
+  // ── Renderizar arestas ───────────────────────────────────
+  function edgePath(s,t){
+    var rs=nodeR(s), rt=nodeR(t);
+    var dx=t.x-s.x, dy=t.y-s.y, dist=Math.sqrt(dx*dx+dy*dy)||1;
+    var ux=dx/dist, uy=dy/dist;
+    var x1=s.x+ux*rs, y1=s.y+uy*rs;
+    var x2=t.x-ux*rt, y2=t.y-uy*rt;
+    var mx=(x1+x2)/2, my=(y1+y2)/2;
+    var perp=Math.min(70,Math.max(-70,dist*0.1));
+    var qx=mx-uy*perp, qy=my+ux*perp;
+    return 'M'+x1+','+y1+' Q'+qx+','+qy+' '+x2+','+y2;
+  }
+
+  function renderEdges(nodes, edges, selEdgeId, creatingEdge){
+    var map={}; nodes.forEach(function(n){ map[n.key]=n; });
+    var html = (edges||[]).map(function(e){
+      var s=map[e.source_key], t=map[e.target_key]; if(!s||!t) return '';
+      var isDir=e.direction!=='undirected';
+      var isSel=e.id&&e.id===selEdgeId;
+      var mkr=isDir?(isSel?' marker-end="url(#arr-sel)"':' marker-end="url(#arr)"'):'';
+      var cls='obs-edge obs-rel-'+safeId(e.relation_type)+(isSel?' obs-edge-selected':'')+(e.generated?' obs-edge-generated':'');
+      var d=edgePath(s,t);
+      return '<g class="obs-edge-wrap" data-eid="'+escAttr(e.id)+'" data-sk="'+escAttr(e.source_key)+'" data-tk="'+escAttr(e.target_key)+'">' +
+        '<path class="obs-edge-hit" d="'+d+'"/>' +
+        '<path class="'+cls+'" d="'+d+'"'+mkr+'/>' +
+        '<title>'+esc(relationLabel(e.relation_type)+(isDir?' →':' ↔')+(e.note?' · '+e.note:''))+'</title>' +
+      '</g>';
+    }).join('');
+    // Aresta temporária (modo criar relação)
+    if(creatingEdge&&creatingEdge.x1!==undefined){
+      var c=creatingEdge;
+      html+='<line class="obs-edge-creating" x1="'+c.x1+'" y1="'+c.y1+'" x2="'+c.x2+'" y2="'+c.y2+'" marker-end="url(#arr-tmp)"/>';
+    }
+    return html;
+  }
+
+  function refreshGeometry(container, pr, st){
+    if(!container||!pr) return;
+    var map={}; (pr.nodes||[]).forEach(function(n){ map[n.key]=n; });
+    container.querySelectorAll('.obs-node').forEach(function(el){
+      var n=map[el.getAttribute('data-nk')];
+      if(n) el.setAttribute('transform','translate('+n.x+','+n.y+')');
+    });
+    container.querySelectorAll('.obs-edge-wrap').forEach(function(g){
+      var s=map[g.getAttribute('data-sk')], t=map[g.getAttribute('data-tk')];
+      if(!s||!t) return;
+      var d=edgePath(s,t);
+      g.querySelectorAll('path').forEach(function(p){ p.setAttribute('d',d); });
+    });
+    var tmp=container.querySelector('.obs-edge-creating');
+    if(tmp && st && st.creatingEdge){
+      tmp.setAttribute('x1',st.creatingEdge.x1); tmp.setAttribute('y1',st.creatingEdge.y1);
+      tmp.setAttribute('x2',st.creatingEdge.x2); tmp.setAttribute('y2',st.creatingEdge.y2);
+    }
+  }
+
+  // ── Renderizar nós ───────────────────────────────────────
+  function renderNodes(nodes, selKey, creatingFrom){
+    return (nodes||[]).map(function(n){
+      var r=nodeR(n);
+      var sel=selKey===n.key;
+      var isCreatingSrc=creatingFrom===n.key;
+      var isPath=n.type==='path';
+      var expanded=isPath&&_expanded[n.id];
+      var badge='';
+      if(isPath&&n.meta){
+        var cnt=(n.meta._materialCount||0);
+        if(cnt>0) badge='<text class="obs-node-badge" y="'+(-(r-6))+'" x="'+(r-6)+'" text-anchor="middle">'+cnt+'</text>';
+      }
+      return '<g class="obs-node obs-node-'+esc(n.type)+(sel?' selected':'')+(isCreatingSrc?' creating-src':'')+'" data-nk="'+escAttr(n.key)+'" transform="translate('+n.x+','+n.y+')" tabindex="0" role="button" aria-label="'+escAttr(nodeTypeLabel(n.type)+' '+n.label)+'">' +
+        '<circle r="'+r+'"/>' +
+        (expanded?'<circle r="'+(r+8)+'" class="obs-node-expanded-ring"/>':'') +
+        '<text class="obs-node-icon material-symbols-outlined" y="'+(isPath?10:8)+'" text-anchor="middle">'+TYPE_ICONS[n.type]+'</text>' +
+        badge +
+        '<text class="obs-node-label" y="'+(r+16)+'" text-anchor="middle">'+esc(trunc(n.label||n.id,LABEL_MAX))+'</text>' +
+        '<title>'+esc(nodeTypeLabel(n.type)+' · '+(n.label||''))+'</title>' +
+      '</g>';
+    }).join('');
+  }
+
+  // ── Redraw rápido (sem recriar SVG) ─────────────────────
+  function redraw(cid){
+    var container=document.getElementById(cid); if(!container) return;
+    var layer=container.querySelector('.obs-graph-layer'); if(!layer) return;
+    var st=_states[cid]||{};
+    var pr=_prepared[cid]||{nodes:[],edges:[]};
+    layer.innerHTML=renderEdges(pr.nodes,pr.edges,st.selEdge,st.creatingEdge)+
+                    renderNodes(pr.nodes,st.selected,st.creatingFrom);
+    layer.setAttribute('transform','translate('+(st.tx||0)+','+(st.ty||0)+') scale('+(st.scale||1)+')');
+    _rebindNodes(container, pr, st, _options[cid]||{});
+    _rebindEdges(container, pr, st, _options[cid]||{});
+  }
+
+  // ── Render completo ──────────────────────────────────────
+  function render(containerId, data, options){
+    options=options||{};
+    data=data||{nodes:[],edges:[]};
+    var container=typeof containerId==='string'?document.getElementById(containerId):containerId;
+    if(!container) return;
+    var cid=container.id;
+    var pr=prepare(data.nodes||[],data.edges||[],options.filters||{});
+    var w=Math.max(container.clientWidth||900,360);
+    var h=Math.max(options.height||620,container.clientHeight||420,360);
+    var scope=options.scope||'general';
+    var scopeId=options.scopeId||options.scope_id||'';
+    var scopeKey=_scopeKeyFromParts(scope, scopeId);
+    // Carrega posições remotas uma vez por escopo. Renderiza localmente primeiro e re-renderiza ao chegar.
+    _remoteLoad(scopeKey, options, function(){ render(containerId, data, options); });
+    layout(pr.nodes,pr.edges,w,h,scopeKey);
+    _prepared[cid]=pr;
+    _options[cid]=options;
+
+    // Preservar transform se já existia
+    var st=_states[cid]||{scale:1,tx:0,ty:0,selected:null,selEdge:null,creatingFrom:null,creatingEdge:null,scope:scope,scopeId:scopeId,scopeKey:scopeKey};
+    st.scope=scope;
+    st.scopeId=scopeId;
+    st.scopeKey=scopeKey;
+    _states[cid]=st;
+
+    container.innerHTML=
+      '<svg class="obs-graph-svg" viewBox="0 0 '+w+' '+h+'" role="img">' +
+        buildDefs() +
+        '<g class="obs-graph-layer" id="'+safeId(cid)+'_layer" transform="translate('+(st.tx)+','+(st.ty)+') scale('+(st.scale)+')">' +
+          renderEdges(pr.nodes,pr.edges,st.selEdge,st.creatingEdge)+
+          renderNodes(pr.nodes,st.selected,st.creatingFrom) +
+        '</g>' +
+      '</svg>';
+
+    _bindSVG(container, pr, st, options);
+    _rebindNodes(container, pr, st, options);
+    _rebindEdges(container, pr, st, options);
+
+    if(options.counterId){
+      var c=document.getElementById(options.counterId);
+      if(c) c.textContent=pr.nodes.length+' nós · '+pr.edges.length+' relações';
+    }
+  }
+
+  // ── Bind SVG: pan + zoom ─────────────────────────────────
+  function _bindSVG(container, pr, st, opts){
+    var svg=container.querySelector('svg'); if(!svg) return;
+    var layer=container.querySelector('.obs-graph-layer');
+
+    function applyT(){
+      if(layer) layer.setAttribute('transform','translate('+st.tx+','+st.ty+') scale('+st.scale+')');
+    }
+    function svgCoord(cx,cy){
+      var rect=svg.getBoundingClientRect();
+      return { x:(cx-rect.left-st.tx)/st.scale, y:(cy-rect.top-st.ty)/st.scale };
+    }
+
+    // Zoom por roda
+    svg.addEventListener('wheel',function(e){
+      e.preventDefault();
+      var old=st.scale, nxt=Math.max(.2,Math.min(4,old*(e.deltaY>0?.88:1.12)));
+      var rect=svg.getBoundingClientRect(), mx=e.clientX-rect.left, my=e.clientY-rect.top;
+      st.tx=mx-((mx-st.tx)/old)*nxt;
+      st.ty=my-((my-st.ty)/old)*nxt;
+      st.scale=nxt; applyT();
+    },{passive:false});
+
+    // Pan (pointer events — separado do drag de nó)
+    var pan=null;
+    svg.addEventListener('pointerdown',function(e){
+      // Ignorar se clicou num nó ou aresta
+      if(e.target.closest&&(e.target.closest('.obs-node')||e.target.closest('.obs-edge-wrap'))) return;
+      // Modo criar relação: clique em branco cancela
+      if(st.creatingFrom){ st.creatingFrom=null; st.creatingEdge=null; redraw(container.id); return; }
+      pan={x:e.clientX,y:e.clientY,tx:st.tx,ty:st.ty};
+      svg.setPointerCapture(e.pointerId);
+    });
+    svg.addEventListener('pointermove',function(e){
+      // Mover aresta temporária se estiver criando relação, mesmo sem pan.
+      if(st.creatingFrom&&st.creatingEdge){
+        var coord=svgCoord(e.clientX,e.clientY);
+        st.creatingEdge.x2=coord.x; st.creatingEdge.y2=coord.y;
+        refreshGeometry(container, pr, st);
+      }
+      if(!pan) return;
+      st.tx=pan.tx+(e.clientX-pan.x); st.ty=pan.ty+(e.clientY-pan.y); applyT();
+    });
+    svg.addEventListener('pointerup',function(){ pan=null; });
+    svg.addEventListener('pointercancel',function(){ pan=null; });
+
+    // Touch: impedir scroll durante interação
+    svg.addEventListener('touchstart',function(e){ if(e.touches.length>1) return; e.preventDefault(); },{passive:false});
+    svg.addEventListener('touchmove',function(e){ e.preventDefault(); },{passive:false});
+
+    // Pinch zoom
+    var pinchDist=null;
+    svg.addEventListener('touchstart',function(e){
+      if(e.touches.length===2){
+        pinchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+      }
+    },{passive:true});
+    svg.addEventListener('touchmove',function(e){
+      if(e.touches.length===2&&pinchDist){
+        var d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+        st.scale=Math.max(.2,Math.min(4,st.scale*d/pinchDist)); pinchDist=d; applyT();
+      }
+    },{passive:true});
+    svg.addEventListener('touchend',function(){ pinchDist=null; },{passive:true});
+
+    // Clique em branco = deselect
+    svg.addEventListener('click',function(e){
+      if(e.target.closest&&(e.target.closest('.obs-node')||e.target.closest('.obs-edge-wrap'))) return;
+      st.selected=null; st.selEdge=null;
+      if(opts.onBlankClick) opts.onBlankClick();
+      redraw(container.id);
+    });
+  }
+
+  // ── Bind nós: drag robusto + clique + criar relação ──────
+  function _rebindNodes(container, pr, st, opts){
+    var svg=container.querySelector('svg');
+    var nmap={}; pr.nodes.forEach(function(n){ nmap[n.key]=n; });
+
+    container.querySelectorAll('.obs-node').forEach(function(el){
+      // Clone para remover listeners anteriores
+      var fresh=el.cloneNode(true);
+      el.parentNode.replaceChild(fresh,el);
+      el=fresh;
+
+      var key=el.getAttribute('data-nk');
+      var n=nmap[key]; if(!n) return;
+
+      // ── Drag robusto com pointer capture ──
+      var dragging=false, didMove=false;
+      var startSvg=null, startNx=0, startNy=0;
+
+      el.addEventListener('pointerdown',function(e){
+        e.stopPropagation();
+        // Modo criar relação: clique = definir origem
+        if(st.creatingFrom===undefined) st.creatingFrom=null;
+        if(opts.createRelationMode){
+          if(!st.creatingFrom){
+            st.creatingFrom=key;
+            var rect=container.querySelector('svg').getBoundingClientRect();
+            st.creatingEdge={x1:n.x,y1:n.y,x2:n.x,y2:n.y};
+            redraw(container.id);
+          } else if(st.creatingFrom===key){
+            // Clicou na mesma origem — cancelar
+            st.creatingFrom=null; st.creatingEdge=null;
+            redraw(container.id);
+          } else {
+            // Clicou no destino → abrir modal
+            var src=nmap[st.creatingFrom], tgt=n;
+            st.creatingFrom=null; st.creatingEdge=null;
+            if(opts.onCreateRelation) opts.onCreateRelation(src,tgt);
+            redraw(container.id);
+          }
+          return;
+        }
+
+        dragging=true; didMove=false;
+        var rect=svg.getBoundingClientRect();
+        startSvg={ x:(e.clientX-rect.left-st.tx)/st.scale, y:(e.clientY-rect.top-st.ty)/st.scale };
+        startNx=n.x; startNy=n.y;
+        el.setPointerCapture(e.pointerId);
+      },true);
+
+      el.addEventListener('pointermove',function(e){
+        if(!dragging) return;
+        e.stopPropagation();
+        var rect=svg.getBoundingClientRect();
+        var cx=(e.clientX-rect.left-st.tx)/st.scale;
+        var cy=(e.clientY-rect.top-st.ty)/st.scale;
+        var dx=cx-startSvg.x, dy=cy-startSvg.y;
+        if(Math.abs(dx)>3||Math.abs(dy)>3) didMove=true;
+        n.x=startNx+dx; n.y=startNy+dy;
+        refreshGeometry(container, pr, st);
+      },true);
+
+      el.addEventListener('pointerup',function(e){
+        if(!dragging) return;
+        dragging=false;
+        try { el.releasePointerCapture(e.pointerId); } catch(_) {}
+        if(!didMove){
+          // Foi clique, não drag
+          st.selected=key; st.selEdge=null;
+          if(opts.onNodeClick) opts.onNodeClick(n,pr);
+          redraw(container.id);
+        } else {
+          // Salvar posição após drag
+          _scheduleSave(st.scopeKey||st.scope||'general', pr.nodes, opts || {});
+        }
+      },true);
+
+      el.addEventListener('pointercancel',function(e){
+        dragging=false;
+        try { el.releasePointerCapture(e.pointerId); } catch(_){}
+      },true);
+
+      // Teclado
+      el.addEventListener('keydown',function(e){
+        if(e.key==='Enter'||e.key===' '){
+          st.selected=key; st.selEdge=null;
+          if(opts.onNodeClick) opts.onNodeClick(n,pr);
+          redraw(container.id); e.preventDefault();
+        }
+      });
+
+      // Duplo clique = expandir/recolher trilha
+      el.addEventListener('dblclick',function(e){
+        e.stopPropagation();
+        if(n.type==='path') toggleExpand(n.id, container.id);
+      });
+    });
+  }
+
+  // ── Bind arestas ─────────────────────────────────────────
+  function _rebindEdges(container, pr, st, opts){
+    var emap={}; pr.edges.forEach(function(e){ if(e.id) emap[e.id]=e; });
+    container.querySelectorAll('.obs-edge-wrap').forEach(function(el){
+      var fresh=el.cloneNode(true);
+      el.parentNode.replaceChild(fresh,el);
+      el=fresh;
+      el.addEventListener('click',function(e){
+        e.stopPropagation();
+        var id=el.getAttribute('data-eid'); if(!id) return;
+        st.selEdge=id; st.selected=null;
+        if(opts.onEdgeClick) opts.onEdgeClick(emap[id],pr);
+        redraw(container.id);
+      });
+    });
+  }
+
+  // ── API pública ──────────────────────────────────────────
+  function zoom(cid, dir){
+    var c=document.getElementById(cid); if(!c) return;
+    var st=_states[cid]||{scale:1,tx:0,ty:0};
+    var rect=c.getBoundingClientRect(), cx2=rect.width/2, cy2=rect.height/2;
+    var old=st.scale, nxt=Math.max(.2,Math.min(4,old*(dir>0?1.2:.83)));
+    st.tx=cx2-((cx2-st.tx)/old)*nxt;
+    st.ty=cy2-((cy2-st.ty)/old)*nxt;
+    st.scale=nxt; _states[cid]=st;
+    var layer=c.querySelector('.obs-graph-layer');
+    if(layer) layer.setAttribute('transform','translate('+st.tx+','+st.ty+') scale('+nxt+')');
+  }
+
+  function reset(cid){
+    var st=_states[cid]||{}; st.scale=1; st.tx=0; st.ty=0; st.selected=null; st.selEdge=null;
+    st.creatingFrom=null; st.creatingEdge=null;
+    _states[cid]=st;
+    var c=document.getElementById(cid);
+    var layer=c&&c.querySelector('.obs-graph-layer');
+    if(layer) layer.setAttribute('transform','translate(0,0) scale(1)');
+  }
+
+  function fitToView(cid, prepared){
+    var c=document.getElementById(cid); if(!c) return;
+    var nodes=(prepared||_prepared[cid]||{}).nodes||[];
+    if(!nodes.length){ reset(cid); return; }
+    var minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+    nodes.forEach(function(n){ if(n.x<minX)minX=n.x;if(n.y<minY)minY=n.y;if(n.x>maxX)maxX=n.x;if(n.y>maxY)maxY=n.y; });
+    var w=c.clientWidth||800, h=c.clientHeight||500;
+    var gw=maxX-minX+NODE_R_PATH*4, gh=maxY-minY+NODE_R_PATH*4;
+    var s=Math.max(.2,Math.min(2.5,Math.min(w/Math.max(gw,1),h/Math.max(gh,1))*.88));
+    var tx=w/2-(minX+gw/2)*s, ty=h/2-(minY+gh/2)*s;
+    var st=_states[cid]||{}; st.scale=s; st.tx=tx; st.ty=ty; _states[cid]=st;
+    var layer=c.querySelector('.obs-graph-layer');
+    if(layer) layer.setAttribute('transform','translate('+tx+','+ty+') scale('+s+')');
+  }
+
+  function clearPositions(scope, scopeId, accessToken){
+    var scopeKey=_scopeKeyFromParts(scope||'general', scopeId||'');
+    try { localStorage.removeItem(_posKey(scopeKey)); } catch(_){}
+    delete _remotePositions[scopeKey];
+    delete _remoteLoaded[scopeKey];
+    if(accessToken && window.google && google.script && google.script.run){
+      google.script.run
+        .withSuccessHandler(function(){})
+        .withFailureHandler(function(){})
+        .clearGraphNodePositions({accessToken:accessToken, graphScope:_scopeFromKey(scopeKey), scopeId:_scopeIdFromKey(scopeKey)});
+    }
+  }
+
+  function toggleExpand(pathId, cid){
+    pathId = String(pathId);
+    _expanded[pathId] = !_expanded[pathId];
+    // Notificar a view para recarregar o grafo com expansão
+    if(_options[cid]&&_options[cid].onExpandToggle) _options[cid].onExpandToggle(pathId,_expanded[pathId]);
+  }
+
+  function setCreateRelationMode(cid, active){
+    var st=_states[cid]||{}; st.creatingFrom=active?null:undefined; _states[cid]=st;
+    if(!active){ st.creatingFrom=null; st.creatingEdge=null; redraw(cid); }
+  }
+
+  return {
+    render:render, zoom:zoom, reset:reset, fitToView:fitToView,
+    clearPositions:clearPositions, redraw:redraw,
+    setCreateRelationMode:setCreateRelationMode,
+    toggleExpand:toggleExpand,
+    relationLabel:relationLabel, directionLabel:directionLabel, nodeTypeLabel:nodeTypeLabel,
+    // Estado expansão
+    isExpanded:function(pathId){ return !!_expanded[pathId]; },
+    expandedPathIds:function(){ return Object.keys(_expanded).filter(function(k){ return !!_expanded[k]; }); },
+    setExpanded:function(pathId, value){ _expanded[String(pathId)]=!!value; },
+    escHtml:esc, escAttr:escAttr
+  };
+})();
+</script>
