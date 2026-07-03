@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?></head>
+<body class="bg-background">
+
+<?!= include('partials/sidebar'); ?>
+<div class="main-content">
+  <?!= include('partials/topbar'); ?>
+
+  <main class="page-content">
+    <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div><h2>Trilhas de Estudo</h2><p>Conecte materiais da biblioteca a uma ordem real de estudo.</p></div>
+      <button class="btn-primary" onclick="openModal('modalNewPath')" style="border-radius:100px;padding:8px 20px"><span class="material-symbols-outlined" style="font-size:18px">add</span> Nova Trilha</button>
+    </div>
+
+    <div id="trailError" style="display:none"></div>
+
+    <section id="pathsSection">
+      <div id="pathsList" style="display:flex;flex-direction:column;gap:10px"><div class="skeleton" style="height:72px;border-radius:14px"></div><div class="skeleton" style="height:72px;border-radius:14px"></div><div class="skeleton" style="height:72px;border-radius:14px"></div></div>
+    </section>
+
+    <section id="pathDetail" style="display:none;margin-top:24px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+        <button onclick="backToPaths()" class="btn-secondary" style="border-radius:100px;padding:7px 14px"><span class="material-symbols-outlined" style="font-size:18px">arrow_back</span> Voltar</button>
+        <div style="flex:1;min-width:0">
+          <h3 id="pathTitle" style="font-size:22px;font-weight:800;color:var(--text-primary);margin:0;word-break:break-word"></h3>
+          <p id="pathDesc" style="font-size:13px;color:var(--text-muted);margin:3px 0 0"></p>
+        </div>
+        <button id="btnAddMaterial" onclick="openAddMaterialModal()" class="btn-primary" style="border-radius:100px;padding:7px 16px;font-size:13px"><span class="material-symbols-outlined" style="font-size:16px">playlist_add</span> Adicionar material</button>
+      </div>
+
+      <div class="settings-card" style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-muted);margin-bottom:6px"><span>Progresso na trilha</span><span id="progressLabel" style="color:var(--primary);font-weight:700">0%</span></div>
+        <div class="progress-bar"><div class="progress-bar-fill" id="pathProgress" style="width:0%"></div></div>
+      </div>
+
+      <div class="trail-tabs" role="tablist" aria-label="Visualização da trilha">
+        <button id="tabBtnLista" class="trail-tab-btn active" onclick="switchPathTab('lista')"><span class="material-symbols-outlined">view_list</span> Lista</button>
+        <button id="tabBtnGrafo" class="trail-tab-btn" onclick="switchPathTab('grafo')"><span class="material-symbols-outlined">hub</span> Grafo</button>
+        <button id="tabBtnRelacoes" class="trail-tab-btn" onclick="switchPathTab('relacoes')"><span class="material-symbols-outlined">account_tree</span> Relações</button>
+      </div>
+
+      <div id="trailTabList">
+      <div class="settings-card" style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <div>
+            <h3 style="font-size:16px;font-weight:800;color:var(--text-primary);margin:0">Biblioteca da trilha</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin:4px 0 0">Adicione livros, PDFs, artigos, slides, vídeos, playlists e links já existentes na biblioteca. Nada é duplicado no Drive.</p>
+          </div>
+          <button id="btnAddMaterialInline" onclick="openAddMaterialModal()" class="btn-primary" style="border-radius:100px;padding:8px 16px;font-size:13px"><span class="material-symbols-outlined" style="font-size:16px">playlist_add</span> Adicionar da biblioteca</button>
+        </div>
+      </div>
+
+      <div id="pathItemsList" style="display:flex;flex-direction:column;gap:12px"><div class="skeleton" style="height:130px;border-radius:14px"></div></div>
+      </div>
+
+      <div id="trailTabGraph" style="display:none">
+        <section class="graph-shell">
+          <div class="graph-card">
+            <div class="graph-toolbar">
+              <strong style="color:#191c1e">Grafo desta trilha</strong>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <span id="trailGraphCounter" class="badge badge-secondary">0 nós · 0 relações</span>
+                <button class="btn-secondary" onclick="GRAPH_RENDERER.zoom('trailGraph',-1)" style="border-radius:999px;padding:7px 10px"><span class="material-symbols-outlined">zoom_out</span></button>
+                <button class="btn-secondary" onclick="GRAPH_RENDERER.zoom('trailGraph',1)" style="border-radius:999px;padding:7px 10px"><span class="material-symbols-outlined">zoom_in</span></button>
+                <button class="btn-secondary" onclick="resetTrailGraph()" style="border-radius:999px;padding:7px 12px">Resetar</button>
+              </div>
+            </div>
+            <div id="trailGraph" class="obs-graph-viewport"><div class="skeleton" style="height:100%;border-radius:0 0 18px 18px"></div></div>
+          </div>
+          <aside class="graph-card graph-side-panel"><div id="trailNodeDetails"><p style="font-size:13px;color:#737686">Clique em um nó para ver detalhes.</p></div></aside>
+        </section>
+      </div>
+
+      <div id="trailTabRelations" style="display:none">
+        <div class="relation-card" style="padding:16px;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><h3 style="font-size:17px;font-weight:800;margin:0;color:#191c1e">Relações da trilha</h3><p style="font-size:12px;color:var(--text-muted);margin:4px 0 0">Crie relações entre materiais desta trilha. Para tópicos, tags e categorias, use a tela completa de Relações.</p></div><button class="btn-secondary" onclick="navigate('relacoes')" style="border-radius:999px;padding:8px 14px">Tela completa</button></div>
+          <div id="trailRelationForm" style="display:grid;grid-template-columns:1fr 1fr 1fr 140px;gap:10px;margin-top:12px" class="responsive-four-cols">
+            <select id="trailRelSource" class="form-control"><option value="">Origem</option></select>
+            <select id="trailRelTarget" class="form-control"><option value="">Destino</option></select>
+            <select id="trailRelType" class="form-control"><option value="prerequisite">Pré-requisito</option><option value="recommended_after">Recomendado depois</option><option value="related" selected>Relacionado</option><option value="depends_on">Depende de</option><option value="explains">Explica</option><option value="custom">Personalizada</option></select>
+            <select id="trailRelDirection" class="form-control"><option value="directed">Direcional</option><option value="undirected">Não direcional</option></select>
+          </div>
+          <textarea id="trailRelNote" class="form-control" rows="2" placeholder="Nota/justificativa" style="margin-top:10px"></textarea>
+          <button id="trailRelSaveBtn" class="btn-primary" onclick="saveTrailRelation()" style="border-radius:12px;padding:10px 16px;margin-top:10px">Salvar relação</button>
+        </div>
+        <div id="trailRelationsList" class="relation-list"><div class="skeleton" style="height:74px;border-radius:14px"></div></div>
+      </div>
+    </section>
+
+    <div id="emptyPaths" class="empty-state" style="display:none"><span class="material-symbols-outlined">route</span><h3 style="font-size:17px;font-weight:600;color:var(--text-primary);margin:8px 0 4px">Nenhuma trilha ainda</h3><p>Crie trilhas para organizar a ordem de leitura dos materiais.</p><button class="btn-primary" onclick="openModal('modalNewPath')" style="margin-top:16px;border-radius:100px;padding:9px 22px">Criar primeira trilha</button></div>
+    <div class="safe-bottom-pad"></div>
+  </main>
+</div>
+
+<div id="modalNewPath" class="modal-backdrop" style="display:none"><div class="modal-box"><div style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:17px;font-weight:700">Nova Trilha de Estudo</h3><button onclick="closeModal('modalNewPath')" class="btn-secondary" style="border:none;padding:4px"><span class="material-symbols-outlined">close</span></button></div><div style="padding:20px;display:flex;flex-direction:column;gap:14px"><div class="filter-select"><label>Título da trilha</label><input type="text" id="newPathTitle" placeholder="Ex: Fundamentos de Banco de Dados" class="form-control"></div><div class="filter-select"><label>Descrição</label><textarea id="newPathDesc" rows="3" placeholder="Sobre esta trilha…" class="form-control" style="resize:none"></textarea></div><div class="filter-select"><label>Visibilidade</label><div style="display:flex;gap:16px;margin-top:4px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px"><input type="radio" name="pathVis" value="public" checked style="accent-color:#004ac6"> Pública</label><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px"><input type="radio" name="pathVis" value="private" style="accent-color:#004ac6"> Privada</label></div></div><button class="btn-primary" id="createPathBtn" onclick="createPath()" style="width:100%;padding:13px;border-radius:12px;font-size:15px;margin-top:4px">Criar Trilha</button></div></div></div>
+
+<div id="modalAddMaterial" class="modal-backdrop" style="display:none"><div class="modal-box"><div style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:17px;font-weight:700">Adicionar material existente</h3><button onclick="closeModal('modalAddMaterial')" class="btn-secondary" style="border:none;padding:4px"><span class="material-symbols-outlined">close</span></button></div><div style="padding:20px;display:flex;flex-direction:column;gap:14px"><div class="filter-select"><label>Buscar na biblioteca</label><input id="materialSearch" type="search" class="form-control" placeholder="Título, autor ou arquivo" oninput="debounceMaterialSearch()"></div><div class="filter-select"><label>Material</label><select id="materialPicker" class="form-control"><option value="">Carregando…</option></select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="filter-select"><label>Tipo na trilha</label><select id="itemTypePicker" class="form-control"><option value="required">Obrigatório</option><option value="complementary">Complementar</option><option value="optional">Opcional</option></select></div><label style="font-size:12px;display:flex;align-items:end;gap:6px;padding-bottom:10px"><input id="itemRequiredPicker" type="checkbox" checked style="accent-color:#004ac6"> Conta no progresso</label></div><div style="display:flex;gap:10px"><button onclick="closeModal('modalAddMaterial')" class="btn-secondary" style="flex:1;padding:12px;border-radius:10px">Cancelar</button><button onclick="addSelectedMaterial()" id="addMaterialBtn" class="btn-primary" style="flex:1;padding:12px;border-radius:10px">Adicionar</button></div></div></div></div>
+
+<?!= include('partials/bottomnav'); ?>
+<?!= include('scripts/app'); ?>
+<?!= include('scripts/graph'); ?>
+
+<script>
+var currentPathId = null;
+var currentPath = null;
+var currentItems = [];
+var currentItemProgress = {};
+var canManage = false;
+var materialSearchTimer = null;
+var pathTabMode = 'lista';
+var currentGraphData = { nodes:[], edges:[] };
+var trailGraphLoaded = false;
+var trailRelationsLoaded = false;
+
+onDomReady(function() {
+  loadPaths(function(){
+    var params = (window.REPOSITORY_CONFIG && window.REPOSITORY_CONFIG.params) || {};
+    var pathId = params.pathId || (new URLSearchParams(location.search)).get('pathId');
+    if (pathId) loadPathDetail(pathId);
+  });
+});
+function token(){ return sessionStorage.getItem('RE_ACCESS_TOKEN') || ''; }
+
+function showTrailError(title, action, message, stack) {
+  var el = document.getElementById('trailError'); el.style.display = 'block';
+  el.innerHTML = '<div class="settings-card" style="border-color:#ffb4ab;background:#fff7f6"><div class="badge badge-rejected" style="margin-bottom:10px">ERRO VISÍVEL</div><h2 style="color:#ba1a1a;font-size:22px;margin:0 0 8px">'+escHtml(title)+'</h2><p><b>Ação:</b> '+escHtml(action||'-')+'</p><p><b>Mensagem:</b> '+escHtml(message||'-')+'</p><pre style="white-space:pre-wrap;background:#111;color:#fff;padding:14px;border-radius:12px;overflow:auto;max-height:240px">'+escHtml(stack||message||'')+'</pre><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px"><button class="btn-secondary" onclick="navigate(\'biblioteca\')">Voltar para biblioteca</button><button class="btn-primary" onclick="navigate(\'dashboard\')">Ir para dashboard</button><button class="btn-danger" onclick="loadPaths()">Tentar novamente</button></div></div>';
+}
+
+function loadPaths(done) {
+  console.time && console.time('trilhas:getLearningPaths');
+  google.script.run.withSuccessHandler(function(res) {
+    console.timeEnd && console.timeEnd('trilhas:getLearningPaths');
+    if (!res || !res.ok) { showTrailError('Falha ao carregar trilhas','getLearningPaths',(res&&res.error)||'Resposta inválida',res&&res.stack); return; }
+    renderPaths(res.paths || []); if (typeof done === 'function') done(res.paths || []);
+  }).withFailureHandler(function(e){ console.timeEnd && console.timeEnd('trilhas:getLearningPaths'); showTrailError('Erro no servidor','getLearningPaths',(e&&e.message)||String(e),e&&e.stack); }).getLearningPaths({ accessToken: token() });
+}
+function renderPaths(paths) {
+  var list = document.getElementById('pathsList');
+  if (!paths.length) { list.innerHTML=''; document.getElementById('emptyPaths').style.display='flex'; return; }
+  document.getElementById('emptyPaths').style.display='none';
+  list.innerHTML = paths.map(function(p){ return '<div class="hover-lift" style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:box-shadow .2s" onclick="loadPathDetail(\''+p.id+'\')"><div style="width:40px;height:40px;border-radius:10px;background:#dbe1ff;flex-shrink:0;display:flex;align-items:center;justify-content:center"><span class="material-symbols-outlined" style="color:var(--primary);font-size:22px">route</span></div><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600;color:#191c1e">'+escHtml(p.title)+'</div>'+(p.description?'<div style="font-size:12px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(p.description)+'</div>':'')+'</div><span class="badge '+(p.visibility==='public'?'badge-approved':'badge-archived')+'">'+(p.visibility==='public'?'Pública':'Privada')+'</span><span class="material-symbols-outlined" style="color:#c3c6d7">chevron_right</span></div>'; }).join('');
+}
+function loadPathDetail(pathId) {
+  currentPathId = pathId;
+  document.getElementById('pathsSection').style.display='none'; document.getElementById('pathDetail').style.display='block'; document.getElementById('emptyPaths').style.display='none'; document.getElementById('trailError').style.display='none';
+  document.getElementById('pathItemsList').innerHTML = '<div class="skeleton" style="height:130px;border-radius:14px"></div><div class="skeleton" style="height:130px;border-radius:14px"></div>';
+  console.time && console.time('trilhas:getPathDetail');
+  google.script.run.withSuccessHandler(function(res){
+    console.timeEnd && console.timeEnd('trilhas:getPathDetail');
+    if (!res || !res.ok) { showTrailError('Falha ao abrir trilha','getPathDetail',(res&&res.error)||'Trilha não encontrada',res&&res.stack); return; }
+    currentPath = res.path || {}; currentItems = res.items || []; canManage = !!res.canManage;
+    currentItemProgress = {}; (res.itemProgress || []).forEach(function(p){ currentItemProgress[p.path_item_id]=p; });
+    document.getElementById('pathTitle').textContent = currentPath.title || 'Trilha';
+    document.getElementById('pathDesc').textContent = currentPath.description || '';
+    document.getElementById('btnAddMaterial').style.display = canManage ? 'inline-flex' : 'none'; var inlineBtn=document.getElementById('btnAddMaterialInline'); if(inlineBtn) inlineBtn.style.display = canManage ? 'inline-flex' : 'none';
+    renderPathProgress(); renderPathItems(); populateTrailRelationSelects(); switchPathTab(pathTabMode || 'lista', true);
+    try { history.pushState({page:'trilha-detalhe',params:{pathId:pathId}},'',buildPageUrl('trilha-detalhe',{pathId:pathId})); } catch(_) {}
+  }).withFailureHandler(function(e){ console.timeEnd && console.timeEnd('trilhas:getPathDetail'); showTrailError('Erro no servidor','getPathDetail',(e&&e.message)||String(e),e&&e.stack); }).getPathDetail(pathId, token());
+}
+function renderPathProgress(){ var total=currentItems.filter(function(i){return i.is_required!==false;}).length; var done=currentItems.filter(function(i){var p=currentItemProgress[i.id];return p&&p.status==='completed'&&i.is_required!==false;}).length; var pct=total?Math.round(done/total*100):0; document.getElementById('pathProgress').style.width=pct+'%'; document.getElementById('progressLabel').textContent=pct+'%'; }
+function itemTypeLabel(t){ return t==='complementary'?'Complementar':t==='optional'?'Opcional':'Obrigatório'; }
+function progressLabel(status){ var labels={not_started:'Não iniciado',reading:'Lendo',watching:'Assistindo',completed:'Concluído',review_later:'Revisar depois'}; return labels[status]||status||'Não iniciado'; }
+function renderPathItems(){
+  var list=document.getElementById('pathItemsList');
+  if(!currentItems.length){list.innerHTML='<div class="empty-state"><span class="material-symbols-outlined">playlist_add</span><h3>Trilha vazia</h3><p>Adicione materiais existentes da biblioteca.</p>'+(canManage?'<button class="btn-primary" onclick="openAddMaterialModal()" style="margin-top:12px;border-radius:100px;padding:9px 18px">Adicionar material</button>':'')+'</div>';return;}
+  list.innerHTML=currentItems.map(function(it,idx){
+    var f=it.material||it.study_files||{}; var name=f.final_name||f.suggested_name||f.original_name||'Material'; var prog=currentItemProgress[it.id]&&currentItemProgress[it.id].status || 'not_started';
+    var manageActions = canManage?'<button class="btn-secondary" style="border-radius:100px;padding:7px 10px" onclick="moveItem(\''+it.id+'\',\'up\')">↑</button><button class="btn-secondary" style="border-radius:100px;padding:7px 10px" onclick="moveItem(\''+it.id+'\',\'down\')">↓</button><select class="form-control" style="width:auto;min-width:140px" onchange="changeItemType(\''+it.id+'\',this.value)"><option value="required" '+(it.item_type==='required'?'selected':'')+'>Obrigatório</option><option value="complementary" '+(it.item_type==='complementary'?'selected':'')+'>Complementar</option><option value="optional" '+(it.item_type==='optional'?'selected':'')+'>Opcional</option></select><button class="btn-danger" style="border-radius:100px;padding:7px 13px;font-size:13px" onclick="removeItem(\''+it.id+'\')">Remover</button>':'';
+    var mobileManage = canManage?'<button onclick="moveItem(\''+it.id+'\',\'up\')" class="btn-secondary">Subir</button><button onclick="moveItem(\''+it.id+'\',\'down\')" class="btn-secondary">Descer</button><select class="form-control" onchange="changeItemType(\''+it.id+'\',this.value)"><option value="required" '+(it.item_type==='required'?'selected':'')+'>Obrigatório</option><option value="complementary" '+(it.item_type==='complementary'?'selected':'')+'>Complementar</option><option value="optional" '+(it.item_type==='optional'?'selected':'')+'>Opcional</option></select><button onclick="removeItem(\''+it.id+'\')" class="btn-danger">Remover</button>':'';
+    return '<article class="trail-item-card"><div class="path-item-row" style="display:flex;align-items:flex-start;gap:14px"><div style="width:38px;height:38px;border-radius:50%;background:var(--secondary-container);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0;box-shadow:var(--shadow-xs)">'+(idx+1)+'</div><div style="flex:1;min-width:0"><div class="file-card-header"><div class="file-card-badges">'+fileTypeBadge(f.file_type)+'<span class="badge '+(it.item_type==='required'?'badge-primary':it.item_type==='complementary'?'badge-secondary':'badge-archived')+'">'+itemTypeLabel(it.item_type)+'</span>'+(it.is_required===false?'<span class="badge badge-archived">não conta no progresso</span>':'')+'</div></div><div class="file-card-title">'+escHtml(name)+'</div><div style="font-size:12px;color:var(--text-muted);margin-top:3px">Progresso: '+escHtml(progressLabel(prog))+'</div><div class="file-card-actions" style="margin-top:12px;gap:8px;flex-wrap:wrap"><button class="btn-primary" style="border-radius:100px;padding:7px 13px;font-size:13px" onclick="navigate(\'detalhe\',{id:\''+f.id+'\'})">Abrir material</button><button class="btn-secondary" style="border-radius:100px;padding:7px 13px;font-size:13px" onclick="setItemProgress(\''+it.id+'\',\'reading\')">Marcar lendo</button><button class="btn-secondary" style="border-radius:100px;padding:7px 13px;font-size:13px" onclick="setItemProgress(\''+it.id+'\',\'completed\')">Concluir</button><button class="btn-secondary" style="border-radius:100px;padding:7px 13px;font-size:13px" onclick="setItemProgress(\''+it.id+'\',\'review_later\')">Revisar depois</button>'+manageActions+'</div><div class="path-list-actions-mobile"><button class="btn-secondary" onclick="toggleItemMore(\''+it.id+'\')"><span class="material-symbols-outlined">more_horiz</span> Mais opções</button><div id="more_'+it.id+'" class="more-actions-menu" style="display:none"><button class="btn-primary" onclick="navigate(\'detalhe\',{id:\''+f.id+'\'})">Abrir material</button><button onclick="setItemProgress(\''+it.id+'\',\'reading\')" class="btn-secondary">Marcar lendo</button><button onclick="setItemProgress(\''+it.id+'\',\'completed\')" class="btn-secondary">Concluir</button><button onclick="setItemProgress(\''+it.id+'\',\'review_later\')" class="btn-secondary">Revisar depois</button>'+mobileManage+'</div></div></div></div></article>';
+  }).join('');
+}
+function openItemSheet(itemId){
+  var menu = document.getElementById('more_'+itemId);
+  if(!menu) return;
+  // Criar/atualizar sheet global
+  var sheet = document.getElementById('globalItemSheet');
+  var bd    = document.getElementById('globalItemBd');
+  if(!sheet){
+    sheet = document.createElement('div');
+    sheet.id = 'globalItemSheet';
+    sheet.className = 'item-sheet';
+    sheet.innerHTML = '<div class="item-sheet-handle"></div><div class="item-sheet-title" id="globalItemSheetTitle"></div><div class="item-sheet-actions" id="globalItemSheetActions"></div>';
+    document.body.appendChild(sheet);
+    bd = document.createElement('div');
+    bd.id = 'globalItemBd';
+    bd.className = 'item-sheet-backdrop';
+    bd.onclick = closeItemSheet;
+    document.body.appendChild(bd);
+  }
+  // Pegar título do card pai
+  var card = menu.closest('.file-card') || menu.parentElement;
+  var titleEl = card ? card.querySelector('.file-card-title') : null;
+  document.getElementById('globalItemSheetTitle').textContent = titleEl ? titleEl.textContent : 'Opções';
+  // Copiar botões do menu para o sheet
+  document.getElementById('globalItemSheetActions').innerHTML = menu.innerHTML;
+  sheet.classList.add('open');
+  bd.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+// Fechar sheet ao clicar qualquer botão dentro dele
+document.addEventListener('click', function(e){
+  var sheet = document.getElementById('globalItemSheet');
+  if(!sheet) return;
+  var btn = e.target.closest('#globalItemSheetActions button, #globalItemSheetActions a');
+  if(btn) setTimeout(closeItemSheet, 120); // pequeno delay para a ação rodar
+});
+
+function closeItemSheet(){
+  var sheet = document.getElementById('globalItemSheet');
+  var bd    = document.getElementById('globalItemBd');
+  if(sheet) sheet.classList.remove('open');
+  if(bd)    bd.classList.remove('open');
+  document.body.style.overflow = '';
+}
+// Manter compatibilidade: toggleItemMore agora abre o sheet
+function toggleItemMore(itemId){ openItemSheet(itemId); }
+function backToPaths(){ currentPathId=null; document.getElementById('pathsSection').style.display='block'; document.getElementById('pathDetail').style.display='none'; try{history.pushState({page:'trilhas'},'',buildPageUrl('trilhas'));}catch(_){} }
+function createPath(){ var title=document.getElementById('newPathTitle').value.trim(); var desc=document.getElementById('newPathDesc').value.trim(); var vis=document.querySelector('input[name="pathVis"]:checked'); if(!title){showToast('Informe o título da trilha.','error');return;} var btn=document.getElementById('createPathBtn'); setBtnLoading(btn,true,'Criando…'); google.script.run.withSuccessHandler(function(res){setBtnLoading(btn,false); if(res&&res.ok){showToast('Trilha criada!','success'); closeModal('modalNewPath'); loadPaths(); if(res.path&&res.path.id) loadPathDetail(res.path.id);} else showToast((res&&res.error)||'Erro ao criar trilha.','error');}).withFailureHandler(function(e){setBtnLoading(btn,false);showToast((e&&e.message)||String(e),'error');}).createLearningPath({accessToken:token(),title:title,description:desc,visibility:vis?vis.value:'public'}); }
+function openAddMaterialModal(){ document.getElementById('materialSearch').value=''; loadMaterialPicker(); openModal('modalAddMaterial'); }
+function debounceMaterialSearch(){ clearTimeout(materialSearchTimer); materialSearchTimer=setTimeout(loadMaterialPicker,300); }
+function loadMaterialPicker(){ var sel=document.getElementById('materialPicker'); sel.innerHTML='<option value="">Carregando…</option>'; google.script.run.withSuccessHandler(function(res){ if(!res||!res.ok){sel.innerHTML='<option value="">Erro ao carregar</option>';return;} var files=res.files||[]; sel.innerHTML='<option value="">Selecione…</option>'+files.map(function(f){return '<option value="'+f.id+'">'+escHtml((f.source_type==='youtube_video'?'▶ ':f.source_type==='youtube_playlist'?'▣ ':f.source_type==='external_link'?'🔗 ':'')+(f.final_name||f.suggested_name||f.original_name))+'</option>';}).join(''); if(!files.length) sel.innerHTML='<option value="">Nenhum material disponível</option>'; }).withFailureHandler(function(e){sel.innerHTML='<option value="">Erro</option>'; showToast((e&&e.message)||String(e),'error');}).listMaterialsForPathPicker({accessToken:token(),pathId:currentPathId,search:document.getElementById('materialSearch').value.trim(),limit:50}); }
+function addSelectedMaterial(){ var materialId=document.getElementById('materialPicker').value; if(!materialId){showToast('Selecione um material.','error');return;} var btn=document.getElementById('addMaterialBtn'); setBtnLoading(btn,true,'Adicionando…'); google.script.run.withSuccessHandler(function(res){setBtnLoading(btn,false); if(res&&res.ok){showToast('Material adicionado à trilha.','success'); closeModal('modalAddMaterial'); clearPageCache(); loadPathDetail(currentPathId);} else showToast((res&&res.error)||'Erro ao adicionar.','error',8000);}).withFailureHandler(function(e){setBtnLoading(btn,false);showToast((e&&e.message)||String(e),'error',8000);}).addMaterialToPath({accessToken:token(),pathId:currentPathId,materialId:materialId,itemType:document.getElementById('itemTypePicker').value,isRequired:document.getElementById('itemRequiredPicker').checked}); }
+function moveItem(itemId,dir){ google.script.run.withSuccessHandler(function(res){ if(res&&res.ok){loadPathDetail(currentPathId);} else showToast((res&&res.error)||'Erro ao reordenar.','error');}).withFailureHandler(function(e){showToast((e&&e.message)||String(e),'error');}).movePathItem(itemId,dir,token()); }
+function removeItem(itemId){ if(!confirm('Remover este material da trilha? O arquivo no Drive não será apagado.')) return; google.script.run.withSuccessHandler(function(res){ if(res&&res.ok){showToast('Material removido da trilha.','success');loadPathDetail(currentPathId);} else showToast((res&&res.error)||'Erro ao remover.','error');}).withFailureHandler(function(e){showToast((e&&e.message)||String(e),'error');}).removeMaterialFromPath(itemId,token()); }
+function changeItemType(itemId,type){ google.script.run.withSuccessHandler(function(res){ if(res&&res.ok){showToast('Tipo atualizado.','success');loadPathDetail(currentPathId);} else showToast((res&&res.error)||'Erro ao atualizar.','error');}).withFailureHandler(function(e){showToast((e&&e.message)||String(e),'error');}).updatePathItem(itemId,{itemType:type,accessToken:token()}); }
+
+function switchPathTab(mode, silent){
+  pathTabMode = mode || 'lista';
+  ['Lista','Grafo','Relacoes'].forEach(function(name){ var id='tabBtn'+name; var btn=document.getElementById(id); if(btn) btn.classList.remove('active'); });
+  var map={lista:'trailTabList',grafo:'trailTabGraph',relacoes:'trailTabRelations'};
+  Object.keys(map).forEach(function(k){ var el=document.getElementById(map[k]); if(el) el.style.display = k===pathTabMode ? 'block' : 'none'; });
+  var active={lista:'tabBtnLista',grafo:'tabBtnGrafo',relacoes:'tabBtnRelacoes'}[pathTabMode]; var b=document.getElementById(active); if(b)b.classList.add('active');
+  if(pathTabMode==='grafo') loadTrailGraph(silent);
+  if(pathTabMode==='relacoes') loadTrailRelations(silent);
+}
+function loadTrailGraph(silent){
+  if(!currentPathId) return;
+  if(!silent) document.getElementById('trailGraph').innerHTML='<div class="skeleton" style="height:100%;border-radius:18px"></div>';
+  google.script.run.withSuccessHandler(function(res){ if(!res||!res.ok){showToast((res&&res.error)||'Erro ao carregar grafo.','error');return;} currentGraphData={nodes:res.nodes||[],edges:res.edges||[]}; trailGraphLoaded=true; renderTrailGraph(); }).withFailureHandler(function(e){showToast((e&&e.message)||String(e),'error');}).getGraphData({accessToken:token(),pathId:currentPathId});
+}
+function renderTrailGraph(){ GRAPH_RENDERER.render('trailGraph', currentGraphData, { scope:'learning_path', scopeId:currentPathId, accessToken:token(), counterId:'trailGraphCounter', onNodeClick:showTrailNodeDetails }); }
+function resetTrailGraph(){ GRAPH_RENDERER.clearPositions('learning_path', currentPathId, token()); GRAPH_RENDERER.reset('trailGraph'); renderTrailGraph(); }
+function showTrailNodeDetails(node){
+  var box=document.getElementById('trailNodeDetails'); if(!node){box.innerHTML='<p style="font-size:13px;color:#737686">Clique em um nó para ver detalhes.</p>';return;}
+  var action = node.type==='material'?'<button class="btn-primary" onclick="navigate(\'detalhe\',{id:\''+node.id+'\'})" style="width:100%;border-radius:12px;padding:10px">Abrir material</button>':node.type==='path'?'<button class="btn-primary" onclick="navigate(\'trilha-detalhe\',{pathId:\''+node.id+'\'})" style="width:100%;border-radius:12px;padding:10px">Abrir trilha</button>':'';
+  box.innerHTML='<span class="badge badge-primary">'+escHtml(GRAPH_RENDERER.nodeTypeLabel(node.type))+'</span><h3 class="graph-details-title">'+escHtml(node.label)+'</h3><div class="graph-meta-list"><div class="graph-meta-row"><b>ID</b><span>'+escHtml(String(node.id).substring(0,12))+'…</span></div></div>'+action;
+}
+function populateTrailRelationSelects(){
+  var opts='<option value="">Selecione…</option>'+currentItems.map(function(it){var f=it.material||it.study_files||{}; return f.id?'<option value="'+f.id+'">'+escHtml((it.position||'')+' · '+(f.final_name||f.suggested_name||f.original_name||'Material'))+'</option>':'';}).join('');
+  var s=document.getElementById('trailRelSource'), t=document.getElementById('trailRelTarget'); if(s)s.innerHTML=opts; if(t)t.innerHTML=opts;
+}
+function saveTrailRelation(){
+  if(!canManage){showToast('Sem permissão para gerenciar relações.','error');return;}
+  var source=document.getElementById('trailRelSource').value, target=document.getElementById('trailRelTarget').value;
+  if(!source||!target){showToast('Selecione origem e destino.','error');return;} if(source===target){showToast('Origem e destino não podem ser iguais.','error');return;}
+  var btn=document.getElementById('trailRelSaveBtn'); setBtnLoading(btn,true,'Salvando…');
+  google.script.run.withSuccessHandler(function(res){setBtnLoading(btn,false); if(res&&res.ok){showToast('Relação salva.','success'); document.getElementById('trailRelNote').value=''; loadTrailRelations(); loadTrailGraph(true);} else showToast((res&&res.error)||'Erro ao salvar relação.','error',8000);}).withFailureHandler(function(e){setBtnLoading(btn,false);showToast((e&&e.message)||String(e),'error');}).saveGraphEdge({accessToken:token(),pathId:currentPathId,sourceType:'material',sourceId:source,targetType:'material',targetId:target,relationType:document.getElementById('trailRelType').value,direction:document.getElementById('trailRelDirection').value,note:document.getElementById('trailRelNote').value});
+}
+function loadTrailRelations(){
+  if(!currentPathId) return;
+  google.script.run.withSuccessHandler(function(res){ if(!res||!res.ok){document.getElementById('trailRelationsList').innerHTML='<div class="badge badge-rejected">'+escHtml((res&&res.error)||'Erro')+'</div>';return;} renderTrailRelations(res); }).withFailureHandler(function(e){document.getElementById('trailRelationsList').innerHTML='<div class="badge badge-rejected">'+escHtml((e&&e.message)||String(e))+'</div>';}).listGraphEdges({accessToken:token(),pathId:currentPathId});
+}
+function renderTrailRelations(res){
+  var nodes=res.nodes||[], edges=(res.edges||[]).filter(function(e){return !e.generated;}); var map={}; nodes.forEach(function(n){map[n.key]=n;}); var box=document.getElementById('trailRelationsList');
+  if(!edges.length){box.innerHTML='<div class="empty-state"><span class="material-symbols-outlined">account_tree</span><h3>Nenhuma relação manual</h3><p>Crie relações entre os materiais desta trilha.</p></div>';return;}
+  box.innerHTML=edges.map(function(e){var a=map[e.source_key]||{label:e.source_id},b=map[e.target_key]||{label:e.target_id};return '<article class="relation-item"><div class="relation-item-main"><div><b>'+escHtml(a.label)+'</b><div class="relation-arrow">'+(e.direction==='undirected'?'↔':'→')+' '+escHtml(GRAPH_RENDERER.relationLabel(e.relation_type))+'</div><b>'+escHtml(b.label)+'</b>'+(e.note?'<p style="font-size:12px;color:var(--text-muted);margin:6px 0 0">'+escHtml(e.note)+'</p>':'')+'</div>'+(canManage?'<button class="btn-danger" onclick="deleteTrailRelation(\''+e.id+'\')" style="border-radius:999px;padding:7px 11px">Remover</button>':'')+'</div></article>';}).join('');
+}
+function deleteTrailRelation(id){ if(!confirm('Remover esta relação?')) return; google.script.run.withSuccessHandler(function(res){ if(res&&res.ok){showToast('Relação removida.','success');loadTrailRelations();loadTrailGraph(true);} else showToast((res&&res.error)||'Erro ao remover.','error'); }).withFailureHandler(function(e){showToast((e&&e.message)||String(e),'error');}).deleteGraphEdge(id,token()); }
+ 
+function pathMaterialPrimaryAction(f, itemId){
+  if(!f || !f.id) return '';
+  if(f.source_type==='youtube_video' || f.source_type==='youtube_playlist' || f.file_type==='video' || f.file_type==='playlist') return '<button class="btn-primary" style="border-radius:100px;padding:7px 13px;font-size:13px" onclick="navigate(\'detalhe\',{id:\''+f.id+'\'})">Assistir</button>';
+  if(['document','book','article','notes','slide','summary'].indexOf(String(f.file_type||'').toLowerCase())>=0 && f.google_drive_preview_url) return '<button class="btn-primary" style="border-radius:100px;padding:7px 13px;font-size:13px" onclick="navigate(\'leitor\',{id:\''+f.id+'\',pathId:\''+currentPathId+'\'})">Ler no app</button><button class="btn-secondary" style="border-radius:100px;padding:7px 13px;font-size:13px" onclick="navigate(\'detalhe\',{id:\''+f.id+'\'})">Detalhes</button>';
+  return '<button class="btn-primary" style="border-radius:100px;padding:7px 13px;font-size:13px" onclick="navigate(\'detalhe\',{id:\''+f.id+'\'})">Abrir material</button>';
+}
+function pathMaterialMobileAction(f){
+  if(!f || !f.id) return '';
+  if(f.source_type==='youtube_video' || f.source_type==='youtube_playlist' || f.file_type==='video' || f.file_type==='playlist') return '<button class="btn-primary" onclick="navigate(\'detalhe\',{id:\''+f.id+'\'})">Assistir</button>';
+  if(['document','book','article','notes','slide','summary'].indexOf(String(f.file_type||'').toLowerCase())>=0 && f.google_drive_preview_url) return '<button class="btn-primary" onclick="navigate(\'leitor\',{id:\''+f.id+'\',pathId:\''+currentPathId+'\'})">Ler no app</button><button class="btn-secondary" onclick="navigate(\'detalhe\',{id:\''+f.id+'\'})">Detalhes</button>';
+  return '<button class="btn-primary" onclick="navigate(\'detalhe\',{id:\''+f.id+'\'})">Abrir material</button>';
+}
+function renderPathItems(){
+  var list=document.getElementById('pathItemsList');
+  if(!currentItems.length){list.innerHTML='<div class="empty-state"><span class="material-symbols-outlined">playlist_add</span><h3>Trilha vazia</h3><p>Adicione materiais existentes da biblioteca.</p>'+(canManage?'<button class="btn-primary" onclick="openAddMaterialModal()" style="margin-top:12px;border-radius:100px;padding:9px 18px">Adicionar material</button>':'')+'</div>';return;}
+  list.innerHTML=currentItems.map(function(it,idx){
+    var f=it.material||it.study_files||{}; var name=f.final_name||f.suggested_name||f.original_name||'Material'; var prog=currentItemProgress[it.id]&&currentItemProgress[it.id].status || 'not_started';
+    var thumb=f.thumbnail_url?'<img src="'+escHtml(f.thumbnail_url)+'" alt="" style="width:120px;aspect-ratio:16/9;object-fit:cover;border-radius:12px;border:1px solid #dfe3eb;flex-shrink:0">':'';
+    var meta=(f.channel_title?escHtml(f.channel_title)+' · ':'')+(f.external_provider?escHtml(f.external_provider)+' · ':'')+'Progresso: '+escHtml(progressLabel(prog));
+    var manageActions = canManage?'<button class="btn-secondary" style="border-radius:100px;padding:7px 10px" onclick="moveItem(\''+it.id+'\',\'up\')">↑</button><button class="btn-secondary" style="border-radius:100px;padding:7px 10px" onclick="moveItem(\''+it.id+'\',\'down\')">↓</button><select class="form-control" style="width:auto;min-width:140px" onchange="changeItemType(\''+it.id+'\',this.value)"><option value="required" '+(it.item_type==='required'?'selected':'')+'>Obrigatório</option><option value="complementary" '+(it.item_type==='complementary'?'selected':'')+'>Complementar</option><option value="optional" '+(it.item_type==='optional'?'selected':'')+'>Opcional</option></select><button class="btn-danger" style="border-radius:100px;padding:7px 13px;font-size:13px" onclick="removeItem(\''+it.id+'\')">Remover</button>':'';
+    var mobileManage = canManage?'<button onclick="moveItem(\''+it.id+'\',\'up\')" class="btn-secondary">Subir</button><button onclick="moveItem(\''+it.id+'\',\'down\')" class="btn-secondary">Descer</button><select class="form-control" onchange="changeItemType(\''+it.id+'\',this.value)"><option value="required" '+(it.item_type==='required'?'selected':'')+'>Obrigatório</option><option value="complementary" '+(it.item_type==='complementary'?'selected':'')+'>Complementar</option><option value="optional" '+(it.item_type==='optional'?'selected':'')+'>Opcional</option></select><button onclick="removeItem(\''+it.id+'\')" class="btn-danger">Remover</button>':'';
+    return '<article class="trail-item-card"><div class="path-item-row" style="display:flex;align-items:flex-start;gap:14px"><div style="width:38px;height:38px;border-radius:50%;background:var(--secondary-container);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0;box-shadow:var(--shadow-xs)">'+(idx+1)+'</div>'+thumb+'<div style="flex:1;min-width:0"><div class="file-card-header"><div class="file-card-badges">'+fileTypeBadge(f.file_type)+'<span class="badge '+(it.item_type==='required'?'badge-primary':it.item_type==='complementary'?'badge-secondary':'badge-archived')+'">'+itemTypeLabel(it.item_type)+'</span>'+(it.is_required===false?'<span class="badge badge-archived">não conta no progresso</span>':'')+'</div></div><div class="file-card-title">'+escHtml(name)+'</div><div style="font-size:12px;color:var(--text-muted);margin-top:3px">'+meta+'</div><div class="file-card-actions" style="margin-top:12px;gap:8px;flex-wrap:wrap">'+pathMaterialPrimaryAction(f,it.id)+'<button class="btn-secondary" style="border-radius:100px;padding:7px 13px;font-size:13px" onclick="setItemProgress(\''+it.id+'\',\''+(f.file_type==='video'||f.file_type==='playlist'?'watching':'reading')+'\')">'+(f.file_type==='video'||f.file_type==='playlist'?'Marcar assistindo':'Marcar lendo')+'</button><button class="btn-secondary" style="border-radius:100px;padding:7px 13px;font-size:13px" onclick="setItemProgress(\''+it.id+'\',\'completed\')">Concluir</button><button class="btn-secondary" style="border-radius:100px;padding:7px 13px;font-size:13px" onclick="setItemProgress(\''+it.id+'\',\'review_later\')">Revisar depois</button>'+manageActions+'</div><div class="path-list-actions-mobile"><button class="btn-secondary" onclick="toggleItemMore(\''+it.id+'\')"><span class="material-symbols-outlined">more_horiz</span> Mais opções</button><div id="more_'+it.id+'" class="more-actions-menu" style="display:none">'+pathMaterialMobileAction(f)+'<button onclick="setItemProgress(\''+it.id+'\',\''+(f.file_type==='video'||f.file_type==='playlist'?'watching':'reading')+'\')" class="btn-secondary">'+(f.file_type==='video'||f.file_type==='playlist'?'Marcar assistindo':'Marcar lendo')+'</button><button onclick="setItemProgress(\''+it.id+'\',\'completed\')" class="btn-secondary">Concluir</button><button onclick="setItemProgress(\''+it.id+'\',\'review_later\')" class="btn-secondary">Revisar depois</button>'+mobileManage+'</div></div></div></div></article>';
+  }).join('');
+}
+
+function setItemProgress(itemId,status){ google.script.run.withSuccessHandler(function(res){ if(res&&res.ok){showToast('Progresso atualizado.','success');loadPathDetail(currentPathId);} else showToast((res&&res.error)||'Erro no progresso.','error');}).withFailureHandler(function(e){showToast((e&&e.message)||String(e),'error');}).setPathItemProgress(itemId,status,'',token()); }
+</script>
+</body>
+</html>

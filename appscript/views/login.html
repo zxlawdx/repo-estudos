@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?>
+<style>
+/* Login: mobile = 1 coluna (só form), desktop = 2 colunas (hero + form) */
+@media (min-width: 768px) {
+  #loginRoot { grid-template-columns: 1fr 1fr !important; }
+  .login-hero { display: flex !important; }
+  #mobileBrand { display: none !important; }
+}
+@media (max-width: 767px) {
+  .login-form-wrap { padding: 24px 20px !important; }
+}
+</style>
+</head>
+<body class="bg-background">
+
+<div id="loginRoot" style="display:grid;grid-template-columns:1fr;min-height:100dvh">
+
+  <!-- ── Hero (desktop only) ─────────────────────────────── -->
+  <section class="login-hero" style="background:var(--surface-low);border-right:1px solid var(--border);display:none;flex-direction:column;align-items:center;justify-content:center;padding:48px;position:relative;overflow:hidden">
+    <!-- Grid pattern -->
+    <svg style="position:absolute;inset:0;opacity:.04;pointer-events:none" width="100%" height="100%">
+      <pattern id="g" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" stroke-width="1"/>
+      </pattern>
+      <rect width="100%" height="100%" fill="url(#g)"/>
+    </svg>
+    <div style="z-index:1;text-align:center;max-width:400px">
+      <div style="width:64px;height:64px;background:#004ac6;border-radius:18px;
+           display:flex;align-items:center;justify-content:center;margin:0 auto 24px;
+           box-shadow:0 8px 24px rgba(0,74,198,.3)">
+        <span class="material-symbols-outlined icon-fill" style="font-size:34px;color:#fff">menu_book</span>
+      </div>
+      <h1 style="font-size:32px;font-weight:700;color:var(--primary);letter-spacing:-.02em;margin-bottom:12px">
+        Repositório de Estudos
+      </h1>
+      <p style="font-size:17px;color:var(--text-secondary);line-height:1.6">
+        Organize PDFs, livros, artigos e documentos acadêmicos. Crie trilhas de leitura. Estude com propósito.
+      </p>
+      <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:32px">
+        <div style="display:flex;align-items:center;gap:6px;padding:7px 14px;
+             background:var(--surface);border:1px solid var(--border);border-radius:100px;font-size:13px;font-weight:500;color:#434655">
+          <span class="material-symbols-outlined" style="font-size:18px;color:#004ac6">verified</span>
+          Rigor Acadêmico
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;padding:7px 14px;
+             background:var(--surface);border:1px solid var(--border);border-radius:100px;font-size:13px;font-weight:500;color:#434655">
+          <span class="material-symbols-outlined" style="font-size:18px;color:#004ac6">bolt</span>
+          Fricção Zero
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;padding:7px 14px;
+             background:var(--surface);border:1px solid var(--border);border-radius:100px;font-size:13px;font-weight:500;color:#434655">
+          <span class="material-symbols-outlined" style="font-size:18px;color:#004ac6">cloud_sync</span>
+          Google Drive
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Formulário ──────────────────────────────────────── -->
+  <section class="login-form-wrap" style="display:flex;flex-direction:column;
+    align-items:center;justify-content:center;padding:32px 24px;background:var(--input-bg)">
+    <div style="width:100%;max-width:400px">
+
+      <!-- Branding mobile -->
+      <div style="text-align:center;margin-bottom:32px" id="mobileBrand">
+        <div style="width:48px;height:48px;background:#004ac6;border-radius:14px;
+             display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px">
+          <span class="material-symbols-outlined icon-fill" style="font-size:26px;color:#fff">menu_book</span>
+        </div>
+        <h2 style="font-size:22px;font-weight:700;color:#004ac6">Repositório</h2>
+        <p style="font-size:13px;color:#737686">Organize seus estudos acadêmicos</p>
+      </div>
+
+      <!-- Tabs -->
+      <div style="display:flex;background:var(--surface-low);border-radius:12px;padding:4px;margin-bottom:28px">
+        <button id="tabLogin" onclick="switchTab('login')"
+          style="flex:1;padding:8px;border:none;border-radius:10px;font-size:14px;font-weight:600;
+                 cursor:pointer;background:var(--surface);color:var(--text-primary);box-shadow:0 1px 4px rgba(0,0,0,.08);
+                 transition:all .15s">Entrar</button>
+        <button id="tabSignup" onclick="switchTab('signup')"
+          style="flex:1;padding:8px;border:none;border-radius:10px;font-size:14px;font-weight:600;
+                 cursor:pointer;background:transparent;color:var(--text-muted);transition:all .15s">Cadastrar</button>
+      </div>
+
+      <!-- Login form -->
+      <form id="loginForm" onsubmit="handleLogin(event)" style="display:block">
+        <div style="margin-bottom:16px">
+          <label style="font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+                        color:var(--text-muted);display:block;margin-bottom:6px">E-mail</label>
+          <div style="position:relative">
+            <span class="material-symbols-outlined" style="position:absolute;left:12px;top:50%;
+              transform:translateY(-50%);color:var(--text-muted);font-size:20px;pointer-events:none">alternate_email</span>
+            <input type="email" id="loginEmail" required placeholder="seu@email.edu"
+              style="width:100%;border:1px solid var(--border);border-radius:12px;padding:12px 14px 12px 40px;
+                     font-size:15px;color:var(--text-primary);outline:none;transition:box-shadow .15s;background:var(--input-bg)">
+          </div>
+        </div>
+        <div style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <label style="font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#737686">Senha</label>
+            <a href="#" style="font-size:12px;color:var(--primary);text-decoration:none">Esqueceu?</a>
+          </div>
+          <div style="position:relative">
+            <span class="material-symbols-outlined" style="position:absolute;left:12px;top:50%;
+              transform:translateY(-50%);color:var(--text-muted);font-size:20px;pointer-events:none">lock</span>
+            <input type="password" id="loginPwd" required placeholder="••••••••" minlength="6"
+              style="width:100%;border:1px solid var(--border);border-radius:12px;padding:12px 44px 12px 40px;
+                     font-size:15px;color:var(--text-primary);outline:none;transition:box-shadow .15s;background:var(--input-bg)">
+            <button type="button" onclick="togglePwd('loginPwd',this)"
+              style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
+                     background:none;border:none;cursor:pointer;color:#737686">
+              <span class="material-symbols-outlined" style="font-size:20px">visibility</span>
+            </button>
+          </div>
+        </div>
+        <div id="loginError" style="display:none;background:#ffdad6;color:#93000a;border-radius:8px;
+             padding:10px 14px;font-size:13px;margin-bottom:14px;display:flex;align-items:center;gap:8px">
+          <span class="material-symbols-outlined" style="font-size:18px">error</span>
+          <span id="loginErrorMsg"></span>
+        </div>
+        <button type="submit" id="loginBtn" class="btn-primary" style="width:100%;padding:14px;
+          border-radius:12px;font-size:15px;margin-top:8px">
+          Acessar Repositório
+        </button>
+      </form>
+
+      <!-- Signup form -->
+      <form id="signupForm" onsubmit="handleSignup(event)" style="display:none">
+        <div style="margin-bottom:14px">
+          <label style="font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+                        color:var(--text-muted);display:block;margin-bottom:6px">Nome completo</label>
+          <div style="position:relative">
+            <span class="material-symbols-outlined" style="position:absolute;left:12px;top:50%;
+              transform:translateY(-50%);color:var(--text-muted);font-size:20px">person</span>
+            <input type="text" id="signupName" required placeholder="Seu Nome"
+              style="width:100%;border:1px solid var(--border);border-radius:12px;padding:12px 14px 12px 40px;
+                     font-size:15px;color:var(--text-primary);outline:none;background:var(--input-bg)">
+          </div>
+        </div>
+        <div style="margin-bottom:14px">
+          <label style="font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+                        color:var(--text-muted);display:block;margin-bottom:6px">E-mail</label>
+          <div style="position:relative">
+            <span class="material-symbols-outlined" style="position:absolute;left:12px;top:50%;
+              transform:translateY(-50%);color:var(--text-muted);font-size:20px">alternate_email</span>
+            <input type="email" id="signupEmail" required placeholder="seu@email.edu"
+              style="width:100%;border:1px solid var(--border);border-radius:12px;padding:12px 14px 12px 40px;
+                     font-size:15px;color:var(--text-primary);outline:none;background:var(--input-bg)">
+          </div>
+        </div>
+        <div style="margin-bottom:8px">
+          <label style="font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+                        color:var(--text-muted);display:block;margin-bottom:6px">Senha</label>
+          <div style="position:relative">
+            <span class="material-symbols-outlined" style="position:absolute;left:12px;top:50%;
+              transform:translateY(-50%);color:var(--text-muted);font-size:20px">lock</span>
+            <input type="password" id="signupPwd" required placeholder="Mín. 6 caracteres" minlength="6"
+              style="width:100%;border:1px solid var(--border);border-radius:12px;padding:12px 44px 12px 40px;
+                     font-size:15px;color:var(--text-primary);outline:none;background:var(--input-bg)">
+            <button type="button" onclick="togglePwd('signupPwd',this)"
+              style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
+                     background:none;border:none;cursor:pointer;color:#737686">
+              <span class="material-symbols-outlined" style="font-size:20px">visibility</span>
+            </button>
+          </div>
+        </div>
+        <div id="signupMsg" style="display:none;border-radius:8px;padding:10px 14px;
+             font-size:13px;margin-bottom:14px"></div>
+        <button type="submit" id="signupBtn" class="btn-primary" style="width:100%;padding:14px;
+          border-radius:12px;font-size:15px;margin-top:8px">
+          Criar Conta
+        </button>
+      </form>
+
+      <p style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:24px">
+        Ao acessar, você concorda com os <a href="#" style="color:#004ac6">Termos de Uso</a>.
+      </p>
+    </div>
+  </section>
+</div>
+
+<?!= include('scripts/app'); ?>
+<script>
+(function restoreSavedSessionOnLogin(){
+  try {
+    var raw = localStorage.getItem('RE_AUTH_SESSION_V2');
+    var sess = raw ? JSON.parse(raw) : null;
+    if (sess && sess.accessToken) {
+      sessionStorage.setItem('RE_ACCESS_TOKEN', sess.accessToken || '');
+      if (sess.refreshToken) sessionStorage.setItem('RE_REFRESH_TOKEN', sess.refreshToken || '');
+      sessionStorage.setItem('RE_USER', JSON.stringify(sess.user || {}));
+      sessionStorage.setItem('RE_PROFILE', JSON.stringify(sess.profile || {}));
+      var target = new URLSearchParams(location.search).get('next') || 'dashboard';
+      setTimeout(function(){ goPage(target); }, 30);
+    }
+  } catch(_) {}
+})();
+// Mostrar mobile brand
+if (window.innerWidth < 768) {
+  document.getElementById('mobileBrand').style.display = 'block';
+}
+
+function switchTab(tab) {
+  const isLogin = tab === 'login';
+  document.getElementById('loginForm').style.display   = isLogin ? 'block' : 'none';
+  document.getElementById('signupForm').style.display  = isLogin ? 'none'  : 'block';
+  document.getElementById('tabLogin').style.cssText   += ';background:' + (isLogin ? '#fff;color:var(--text-primary);box-shadow:0 1px 4px rgba(0,0,0,.08)' : 'transparent;color:var(--text-muted);box-shadow:none');
+  document.getElementById('tabSignup').style.cssText  += ';background:' + (!isLogin? '#fff;color:var(--text-primary);box-shadow:0 1px 4px rgba(0,0,0,.08)' : 'transparent;color:var(--text-muted);box-shadow:none');
+}
+
+function togglePwd(inputId, btn) {
+  const inp = document.getElementById(inputId);
+  const ico = btn.querySelector('.material-symbols-outlined');
+  if (inp.type === 'password') { inp.type = 'text';     ico.textContent = 'visibility_off'; }
+  else                         { inp.type = 'password'; ico.textContent = 'visibility'; }
+}
+
+function handleLogin(e) {
+  e.preventDefault();
+  const btn   = document.getElementById('loginBtn');
+  const errEl = document.getElementById('loginError');
+  errEl.style.display = 'none';
+  setBtnLoading(btn, true, 'Entrando…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setBtnLoading(btn, false);
+      if (res && res.ok) {
+        try {
+          sessionStorage.setItem('RE_ACCESS_TOKEN', res.accessToken || '');
+          // Não persistimos refresh token no navegador. O app usa accessToken de curta duração em sessionStorage.
+          sessionStorage.removeItem('RE_REFRESH_TOKEN');
+          sessionStorage.setItem('RE_USER', JSON.stringify(res.user || {}));
+          sessionStorage.setItem('RE_PROFILE', JSON.stringify(res.profile || {}));
+          // Persistir em localStorage via AuthSessionManager (sobrevive ao F5)
+          var persistentSession = {
+            accessToken:  res.accessToken  || '',
+            refreshToken: res.refreshToken || '',
+            expiresAt:    res.expiresAt    || 0,
+            user:    res.user    || {},
+            profile: res.profile || {}
+          };
+          if (window.AuthSessionManager) {
+            AuthSessionManager.saveSession(persistentSession);
+          } else {
+            localStorage.setItem('RE_AUTH_SESSION_V2', JSON.stringify(persistentSession));
+          }
+        } catch (_) {}
+        goPage('dashboard');
+      } else {
+        document.getElementById('loginErrorMsg').textContent = (res && (res.message || res.error)) || 'Erro ao entrar.';
+        errEl.style.display = 'flex';
+      }
+    })
+    .withFailureHandler(function(err) {
+      setBtnLoading(btn, false);
+      document.getElementById('loginErrorMsg').textContent = err.message || 'Erro inesperado.';
+      errEl.style.display = 'flex';
+    })
+    .loginUser(document.getElementById('loginEmail').value, document.getElementById('loginPwd').value);
+}
+
+function handleSignup(e) {
+  e.preventDefault();
+  const btn    = document.getElementById('signupBtn');
+  const msgEl  = document.getElementById('signupMsg');
+  msgEl.style.display = 'none';
+  setBtnLoading(btn, true, 'Criando conta…');
+  google.script.run
+    .withSuccessHandler(function(res) {
+      setBtnLoading(btn, false);
+      if (res && res.ok) {
+        msgEl.style.cssText += ';display:block;background:#d1fae5;color:#065f46';
+        msgEl.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">check_circle</span> ' + (res.message || 'Conta criada!');
+      } else {
+        msgEl.style.cssText += ';display:block;background:#ffdad6;color:#93000a';
+        msgEl.textContent = (res && (res.message || res.error)) || 'Erro ao criar conta.';
+      }
+    })
+    .withFailureHandler(function(err) {
+      setBtnLoading(btn, false);
+      msgEl.style.cssText += ';display:block;background:#ffdad6;color:#93000a';
+      msgEl.textContent = err.message;
+    })
+    .signUpUser(
+      document.getElementById('signupEmail').value,
+      document.getElementById('signupPwd').value,
+      document.getElementById('signupName').value
+    );
+}
+
+// Input focus style
+document.querySelectorAll('input').forEach(function(inp) {
+  inp.addEventListener('focus', function() { this.style.boxShadow = '0 0 0 2px #004ac6'; this.style.borderColor = '#004ac6'; });
+  inp.addEventListener('blur',  function() { this.style.boxShadow = ''; this.style.borderColor = '#c3c6d7'; });
+});
+</script>
+
+<!-- Toggle tema no login -->
+<button id="loginThemeBtn" onclick="toggleTheme()"
+  aria-label="Alternar tema"
+  style="position:fixed;top:14px;right:14px;z-index:200;
+         width:40px;height:40px;border-radius:50%;border:1px solid var(--border);
+         background:var(--surface);color:var(--text-secondary);
+         display:flex;align-items:center;justify-content:center;
+         cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);
+         transition:background .15s,border-color .15s">
+  <span class="material-symbols-outlined" id="loginThemeIcon" style="font-size:20px">dark_mode</span>
+</button>
+<script>
+// Sincronizar ícone do toggle no login
+(function(){
+  function syncLoginIcon(){
+    var icon = document.getElementById('loginThemeIcon');
+    if(icon) icon.textContent = document.documentElement.classList.contains('dark') ? 'light_mode' : 'dark_mode';
+  }
+  syncLoginIcon();
+  // Expor toggleTheme se não existir ainda (o topbar.html não é incluído no login)
+  if(typeof window.toggleTheme === 'undefined'){
+    window.toggleTheme = function(){
+      var dark = document.documentElement.classList.contains('dark');
+      if(dark) document.documentElement.classList.remove('dark');
+      else     document.documentElement.classList.add('dark');
+      try { localStorage.setItem('RE_THEME', dark ? 'light' : 'dark'); } catch(_){}
+      syncLoginIcon();
+    };
+  }
+})();
+</script>
+</body>
+</html>

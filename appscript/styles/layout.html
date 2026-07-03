@@ -1,0 +1,325 @@
+<style>
+/* ============================================================
+   LAYOUT — Estilo Stitch v18
+   Sidebar · TopBar · BottomNav · Main Content
+   ============================================================ */
+
+/* ── Sidebar ── */
+.sidebar {
+  position: fixed; top: 0; left: 0;
+  width: var(--sidebar-width); height: 100dvh;
+  background: var(--surface-low);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  padding: 0; z-index: 200;
+  overflow-y: auto;
+  transition: transform var(--transition-slow), background-color var(--transition-base);
+}
+@media (max-width: 767px) {
+  .sidebar { transform: translateX(-100%); box-shadow: 4px 0 32px rgba(0,0,0,.22); }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 199; display: none; }
+  .sidebar-overlay.open { display: block; }
+}
+
+/* Logo / cabeçalho da sidebar */
+.sidebar-logo {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+.sidebar-logo h1 {
+  font-size: 18px; font-weight: 800;
+  color: var(--primary); line-height: 1.2; letter-spacing: -.02em;
+}
+.sidebar-logo p {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-muted); margin-top: 2px;
+}
+
+/* Usuário na sidebar */
+.sidebar-user {
+  margin: 4px 8px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex; gap: 10px; align-items: center;
+  cursor: pointer; padding: 10px 12px;
+  background: var(--surface);
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
+}
+.sidebar-user:hover { background: var(--surface-high); box-shadow: var(--shadow-xs); }
+.sidebar-user strong { display:block; font-size:13px; font-weight:700; color:var(--text-primary); }
+.sidebar-user #sidebarUserRole { display:block; font-size:11px; color:var(--text-muted); }
+
+/* Itens de navegação — estilo Stitch */
+.nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px; margin: 1px 8px; border-radius: var(--radius-md);
+  font-size: 14px; font-weight: 500; color: var(--text-secondary);
+  cursor: pointer; text-decoration: none;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  position: relative;
+  -webkit-tap-highlight-color: transparent;
+}
+.nav-item:hover {
+  background: var(--surface-high);
+  color: var(--text-primary);
+}
+.nav-item.active {
+  background: var(--secondary-container);
+  color: var(--primary);
+  font-weight: 700;
+  /* Borda esquerda azul — assinatura do Stitch */
+  border-left: 4px solid var(--primary);
+  margin-left: 8px;
+  padding-left: 12px;
+}
+.nav-item.active .material-symbols-outlined { color: var(--primary); }
+.nav-item .material-symbols-outlined { font-size: 22px; transition: color var(--transition-fast); }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* ── TopBar ── */
+.topbar {
+  position: sticky; top: 0;
+  height: var(--topbar-height);
+  background: var(--topbar-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 0 24px; z-index: 100; gap: 16px;
+  transition: background-color var(--transition-base);
+}
+
+/* Busca na topbar — pill arredondado do Stitch */
+.topbar-search { position: relative; flex: 1; max-width: 480px; }
+.topbar-search .material-symbols-outlined {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--text-muted); font-size: 18px; pointer-events: none;
+}
+.topbar-search input {
+  width: 100%;
+  background: var(--surface-low);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  padding: 9px 16px 9px 42px;
+  font-size: 14px; font-family: inherit;
+  color: var(--input-text);
+  outline: none;
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+.topbar-search input::placeholder { color: var(--input-placeholder); }
+.topbar-search input:focus {
+  background: var(--surface);
+  box-shadow: 0 0 0 2px var(--primary);
+  border-color: var(--primary);
+}
+
+.topbar-actions { display: flex; align-items: center; gap: 6px; }
+.topbar-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: 100%; border: none;
+  background: transparent; color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.topbar-btn:hover { background: var(--surface-high); color: var(--primary); }
+
+/* ── Main content ── */
+.main-content { margin-left: var(--sidebar-width); min-height: 100dvh; display: flex; flex-direction: column; }
+@media (max-width: 767px) { .main-content { margin-left: 0; } }
+
+.page-content {
+  flex: 1; padding: 28px 28px;
+  padding-bottom: calc(var(--bottomnav-height) + var(--safe-bottom) + 28px);
+  max-width: 1280px; margin: 0 auto; width: 100%;
+}
+@media (min-width: 768px) { .page-content { padding-bottom: 40px; } }
+@media (max-width: 640px) { .page-content { padding: 16px; padding-bottom: calc(var(--bottomnav-height) + var(--safe-bottom) + 16px); } }
+
+/* ── Page Header ── */
+.page-header { margin-bottom: 28px; }
+.page-header h2 {
+  font-size: clamp(24px, 4vw, 32px);
+  font-weight: 700; letter-spacing: -.02em;
+  color: var(--text-primary); line-height: 1.2; margin: 0 0 6px;
+}
+.page-header p { font-size: 15px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
+
+/* ── Stats grid ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px; margin-bottom: 28px;
+}
+.stat-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 20px;
+  display: flex; align-items: center; gap: 16px;
+  transition: box-shadow var(--transition-base), transform var(--transition-base);
+}
+.stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.stat-icon {
+  width: 48px; height: 48px; border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.stat-icon .material-symbols-outlined { font-size: 26px; }
+.stat-label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.stat-value { font-size: 28px; font-weight: 700; color: var(--text-primary); line-height: 1.1; }
+
+/* ── Section header ── */
+.section-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;
+}
+.section-header h3 { font-size: 18px; font-weight: 700; color: var(--text-primary); letter-spacing: -.01em; }
+.section-header a  { font-size: 13px; font-weight: 600; color: var(--primary); text-decoration: none; }
+.section-header a:hover { text-decoration: underline; }
+
+/* ── Bottom Nav ── */
+.bottomnav {
+  display: none;
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: calc(var(--bottomnav-height) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  background: var(--bottomnav-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid var(--border);
+  z-index: 200;
+  box-shadow: 0 -2px 16px rgba(0,0,0,.08);
+  transition: background-color var(--transition-base);
+}
+@media (max-width: 767px) {
+  .bottomnav {
+    display: flex; align-items: stretch; justify-content: space-around;
+    padding-left: 8px; padding-right: 8px;
+  }
+}
+
+/* Item do bottomnav — pill ativo estilo Stitch */
+.bn-item {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; flex: 1; padding: 6px 4px;
+  color: var(--text-muted); text-decoration: none;
+  cursor: pointer; border: none; background: transparent;
+  border-radius: var(--radius-md);
+  transition: color var(--transition-fast), background var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+.bn-item span.material-symbols-outlined { font-size: 24px; transition: color var(--transition-fast); }
+.bn-item span.label { font-size: 10px; font-weight: 700; letter-spacing: .03em; }
+
+/* Pill azul para ativo — assinatura Stitch */
+.bn-item.active {
+  color: var(--on-primary-container, var(--primary));
+  background: var(--secondary-container);
+  border-radius: var(--radius-full);
+  padding: 6px 14px;
+}
+html.dark .bn-item.active { color: var(--primary); }
+
+/* ── Shell Avatar ── */
+.shell-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--secondary-container); color: var(--primary);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 700; overflow: hidden; flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+.shell-avatar-sm { width: 32px; height: 32px; font-size: 13px; }
+.shell-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+/* ── Chip / Tag / Pill filtro ── */
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: var(--radius-full);
+  font-size: 11px; font-weight: 700;
+  background: var(--surface-high); color: var(--text-secondary);
+  border: 1px solid var(--border); transition: border-color var(--transition-fast);
+}
+.chip:hover { border-color: var(--primary); color: var(--primary); }
+
+/* Filtro chip ativo */
+.chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* ── Filter pills scrollável ── */
+.filter-pills-row {
+  display: flex; gap: 8px; overflow-x: auto;
+  padding-bottom: 2px; margin-bottom: 20px;
+  -webkit-overflow-scrolling: touch;
+}
+.filter-pills-row::-webkit-scrollbar { display: none; }
+
+/* ── More Menu (mobile) ── */
+.mobile-more-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 500; }
+.mobile-more-menu {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 501;
+  background: var(--surface);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding: 0 16px calc(16px + var(--safe-bottom));
+  box-shadow: 0 -8px 40px rgba(0,0,0,.18);
+  max-height: 80dvh; overflow-y: auto;
+}
+.mobile-more-handle {
+  width: 40px; height: 4px; border-radius: 4px;
+  background: var(--border); margin: 12px auto 4px;
+}
+.mobile-more-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 0 12px; font-size: 15px; font-weight: 700;
+  color: var(--text-primary); border-bottom: 1px solid var(--border); margin-bottom: 12px;
+}
+.mobile-more-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  padding-bottom: 8px;
+}
+.mobile-more-grid a {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 14px 8px; border-radius: var(--radius-md);
+  background: var(--surface-low); border: 1px solid var(--border);
+  color: var(--text-primary); text-decoration: none;
+  font-size: 12px; font-weight: 600; text-align: center;
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-more-grid a:hover, .mobile-more-grid a:active {
+  background: var(--secondary-container); border-color: var(--primary-dim); color: var(--primary);
+}
+.mobile-more-grid a .material-symbols-outlined { font-size: 26px; }
+
+/* ── Safe bottom pad ── */
+.safe-bottom-pad { height: calc(var(--bottomnav-height) + var(--safe-bottom) + 16px); }
+@media (min-width: 768px) { .safe-bottom-pad { height: 32px; } }
+
+/* ── Progress bar ── */
+.progress-bar {
+  height: 6px; background: var(--surface-high); border-radius: 100px; overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%; background: var(--primary); border-radius: 100px; transition: width .4s ease;
+}
+
+/* ── Empty state ── */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 64px 24px; text-align: center;
+  color: var(--text-muted);
+}
+.empty-state .material-symbols-outlined { font-size: 56px; margin-bottom: 12px; opacity: .4; }
+.empty-state h3 { font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0 0 6px; }
+.empty-state p  { font-size: 14px; color: var(--text-muted); margin: 0; }
+
+/* ── Folder card hover: complemento de layout ── */
+.folder-card { display: block; }  /* garantir que folder-card existe neste escopo */
+</style>

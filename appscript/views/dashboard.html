@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?></head>
+<body class="bg-background">
+
+<?!= include('partials/sidebar'); ?>
+
+<div class="main-content">
+  <?!= include('partials/topbar'); ?>
+
+  <main class="page-content">
+    <!-- Header -->
+    <div class="page-header">
+      <h2>Dashboard</h2>
+      <p id="welcomeMsg">Carregando seu painel…</p>
+      <div id="dashDebug" style="margin-top:10px;background:#eef4ff;color:var(--primary);border:1px solid #b9c8ff;border-radius:10px;padding:10px 12px;font-size:13px">Dashboard carregado.</div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:var(--primary-container)">
+          <span class="material-symbols-outlined" style="color:var(--primary)">description</span>
+        </div>
+        <div>
+          <div class="stat-label">Total de Arquivos</div>
+          <div class="stat-value" id="statTotal">—</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon" style="background:var(--warning-container)">
+          <span class="material-symbols-outlined" style="color:var(--on-warning-container)">pending_actions</span>
+        </div>
+        <div>
+          <div class="stat-label">Pendentes de Revisão</div>
+          <div class="stat-value" id="statPending">—</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon" style="background:var(--success-container)">
+          <span class="material-symbols-outlined" style="color:var(--success)">menu_book</span>
+        </div>
+        <div>
+          <div class="stat-label">Em Leitura</div>
+          <div class="stat-value" id="statReading">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2 colunas -->
+    <div style="display:grid;grid-template-columns:1fr;gap:24px" id="dashGrid">
+
+      <!-- Recentes -->
+      <section>
+        <div class="section-header">
+          <h3>Adicionados Recentemente</h3>
+          <a href="?page=biblioteca">Ver todos</a>
+        </div>
+        <div class="bento-grid" id="recentGrid">
+          <div class="skeleton" style="height:160px;border-radius:16px"></div>
+          <div class="skeleton" style="height:160px;border-radius:16px"></div>
+          <div class="skeleton" style="height:160px;border-radius:16px"></div>
+        </div>
+      </section>
+
+      <!-- Atalhos rápidos -->
+      <section>
+        <div class="section-header"><h3>Acesso Rápido</h3></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px" id="quickGrid">
+          <? var quickItems = [
+            ['upload','upload_file','#dbe1ff','#004ac6','Upload'],
+            ['revisao','rate_review','#fef3c7','#92400e','Revisão IA'],
+            ['trilhas','route','#d1fae5','#065f46','Trilhas'],
+            ['historico','history','#ffdbcd','#7d2d00','Histórico'],
+          ]; ?>
+          <? for(var i=0;i<quickItems.length;i++) { var qi=quickItems[i]; ?>
+          <a href="?page=<?= qi[0] ?>" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 16px;display:flex;align-items:center;gap:12px;text-decoration:none;transition:transform .2s cubic-bezier(.34,1.56,.64,1),box-shadow var(--transition-base),border-color var(--transition-fast);color:var(--text-primary)" class="hover-lift">
+            <div style="width:40px;height:40px;border-radius:10px;background:<?= qi[2] ?>;
+                 display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <span class="material-symbols-outlined" style="color:<?= qi[3] ?>;font-size:22px"><?= qi[1] ?></span>
+            </div>
+            <span style="font-size:14px;font-weight:600"><?= qi[4] ?></span>
+          </a>
+          <? } ?>
+        </div>
+      </section>
+
+      <!-- Trilhas disponíveis -->
+      <section>
+        <div class="section-header">
+          <h3>Trilhas de Estudo</h3>
+          <a href="?page=trilhas">Ver todas</a>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px" id="pathsList">
+          <div class="skeleton" style="height:64px;border-radius:14px"></div>
+          <div class="skeleton" style="height:64px;border-radius:14px"></div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Revisão pendente (se tiver) -->
+    <div id="pendingBanner" style="display:none;margin-top:24px;background:#fef3c7;
+         border:1px solid #fcd34d;border-radius:14px;padding:16px 20px;
+         display:none;align-items:center;gap:12px;flex-wrap:wrap">
+      <span class="material-symbols-outlined" style="color:#92400e">warning</span>
+      <p style="flex:1;font-size:14px;color:#78350f;font-weight:500">
+        Você tem <strong id="pendingCount">0</strong> arquivo(s) aguardando revisão de nome.
+      </p>
+      <a href="?page=revisao" class="btn-primary" style="border-radius:100px;padding:8px 18px;
+         text-decoration:none;font-size:13px">Revisar agora</a>
+    </div>
+
+    <div class="safe-bottom-pad"></div>
+  </main>
+</div>
+
+<?!= include('partials/bottomnav'); ?>
+<?!= include('scripts/app'); ?>
+
+<script>
+onDomReady(function() {
+  google.script.run
+    .withSuccessHandler(renderDashboard)
+    .withFailureHandler(function(err) {
+      document.querySelector('.page-content').insertAdjacentHTML('afterbegin', '<div class="error-box" style="background:#ffdad6;color:#93000a;border:1px solid #ba1a1a;border-radius:12px;padding:14px;margin-bottom:16px">Erro ao carregar dashboard: ' + escHtml(err.message || err) + '</div>'); showToast('Erro ao carregar dashboard: ' + (err.message || err), 'error', 8000);
+    })
+    .getDashboardData((function(){ try { return sessionStorage.getItem('RE_ACCESS_TOKEN') || ''; } catch(_) { return ''; } })());
+});
+
+function renderDashboard(data) {
+  if (!data || !data.ok) { document.querySelector('.page-content').insertAdjacentHTML('afterbegin', '<div style="background:#ffdad6;color:#93000a;border:1px solid #ba1a1a;border-radius:12px;padding:14px;margin-bottom:16px">' + escHtml((data && data.error) || 'Resposta inválida do dashboard') + '</div>'); return; }
+  var p = data.profile || {};
+  var dbg = document.getElementById('dashDebug'); if (dbg) dbg.textContent = data.debug || 'Dashboard carregado';
+  document.getElementById('welcomeMsg').textContent =
+    'Bem-vindo de volta, ' + (p.display_name || p.full_name || p.email || 'usuário') + '.';
+
+  // Stats
+  document.getElementById('statTotal').textContent   = data.stats.total;
+  document.getElementById('statPending').textContent  = data.stats.pending;
+  document.getElementById('statReading').textContent  = data.stats.inProgress;
+
+  // Recentes
+  var rg = document.getElementById('recentGrid');
+  if (!data.recents || data.recents.length === 0) {
+    rg.innerHTML = '<div class="empty-state"><span class="material-symbols-outlined">folder_open</span>' +
+      '<p>Nenhum arquivo ainda.<br><a href="?page=upload" style="color:#004ac6">Fazer upload</a></p></div>';
+  } else {
+    rg.innerHTML = data.recents.map(function(f) {
+      var name = f.final_name || f.suggested_name || f.original_name;
+      return '<div class="file-card" onclick="navigate(\'detalhe\',{id:\'' + f.id + '\'})">' +
+        '<div class="file-card-header">' + fileTypeBadge(f.file_type) + statusBadge(f.status) + '</div>' +
+        '<div class="file-card-title">' + escHtml(name) + '</div>' +
+        '<div class="file-card-subtitle">' + escHtml(f.original_name) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:auto">' + fmtDate(f.created_at) + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Trilhas
+  var pl = document.getElementById('pathsList');
+  if (!data.paths || data.paths.length === 0) {
+    pl.innerHTML = '<div class="empty-state" style="padding:32px"><span class="material-symbols-outlined">route</span>' +
+      '<p>Nenhuma trilha pública ainda.</p></div>';
+  } else {
+    pl.innerHTML = data.paths.map(function(p) {
+      return '<a href="?page=trilhas&pathId=' + p.id + '" style="background:var(--surface);border:1px solid var(--border);' +
+        'border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;text-decoration:none;' +
+        'transition:box-shadow .2s;color:#191c1e" class="hover-lift">' +
+        '<div style="width:36px;height:36px;border-radius:10px;background:#dbe1ff;' +
+        'display:flex;align-items:center;justify-content:center">' +
+        '<span class="material-symbols-outlined" style="color:var(--primary);font-size:20px">route</span></div>' +
+        '<span style="font-size:14px;font-weight:600;flex:1">' + escHtml(p.title) + '</span>' +
+        '<span class="material-symbols-outlined" style="color:var(--text-muted);font-size:20px">chevron_right</span>' +
+        '</a>';
+    }).join('');
+  }
+
+  // Banner pendentes
+  if (data.stats.pending > 0) {
+    var banner = document.getElementById('pendingBanner');
+    banner.style.display = 'flex';
+    document.getElementById('pendingCount').textContent = data.stats.pending;
+  }
+
+  // Ajuste grid em desktop
+  if (window.innerWidth >= 1024) {
+    document.getElementById('dashGrid').style.gridTemplateColumns = '1fr 320px';
+  }
+}
+</script>
+</body>
+</html>

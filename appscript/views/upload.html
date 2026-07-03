@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?></head>
+<body class="bg-background">
+
+<?!= include('partials/sidebar'); ?>
+<div class="main-content">
+  <?!= include('partials/topbar'); ?>
+
+  <main class="page-content">
+    <div class="page-header">
+      <h2>Upload de Materiais</h2>
+      <p>Envie PDFs, livros, artigos e slides, ou cadastre vídeos/playlists do YouTube por link.</p>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+      <button class="btn-primary" onclick="navigate('cadastrar-link')" style="border-radius:100px;padding:9px 18px"><span class="material-symbols-outlined" style="font-size:18px">add_link</span> Cadastrar por link</button>
+      <span class="badge badge-secondary" style="align-self:center">YouTube, playlist, artigo externo e referência</span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr;gap:20px" id="uploadGrid">
+
+      <!-- Drop zone -->
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+          <div class="drop-zone-icon">
+            <span class="material-symbols-outlined icon-fill">upload_file</span>
+          </div>
+          <h3 style="font-size:17px;font-weight:600;color:var(--text-primary);margin-bottom:6px">
+            Arraste seus arquivos aqui
+          </h3>
+          <p style="font-size:14px;color:var(--text-muted);max-width:320px">
+            Suporta PDF, DOCX, EPUB, PPTX e imagens (máx. 50 MB por arquivo)
+          </p>
+          <button type="button" class="btn-secondary" style="margin-top:16px;border-radius:100px;padding:9px 22px">
+            Selecionar arquivo
+          </button>
+          <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.epub,.ppt,.pptx,.jpg,.jpeg,.png,.webp"
+            style="display:none" onchange="handleFileSelect(this.files[0])">
+        </div>
+
+        <!-- Preview do arquivo selecionado -->
+        <div id="filePreview" style="display:none;background:var(--surface);border:1px solid var(--border);
+             border-radius:16px;padding:16px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+            <div style="width:44px;height:44px;background:var(--primary-container);border-radius:12px;
+                 display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <span class="material-symbols-outlined icon-fill" style="color:var(--primary);font-size:24px">description</span>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div id="previewName" style="font-size:14px;font-weight:600;color:var(--text-primary);
+                   overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+              <div id="previewSize" style="font-size:12px;color:var(--text-muted)"></div>
+            </div>
+            <button onclick="clearFile()" class="btn-secondary" style="border:none;padding:6px;border-radius:8px">
+              <span class="material-symbols-outlined" style="font-size:20px">close</span>
+            </button>
+          </div>
+
+          <!-- Sugestão de nome -->
+          <div id="nameSuggestion" style="display:none;background:var(--primary-container);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+                 color:#003ea8;margin-bottom:4px;display:flex;align-items:center;gap:4px">
+              <span class="material-symbols-outlined" style="font-size:14px">auto_awesome</span> Sugestão IA
+            </div>
+            <div id="suggestedName" style="font-size:14px;font-weight:600;color:#191c1e"></div>
+            <div id="suggestionReason" style="font-size:12px;color:var(--text-secondary);margin-top:2px"></div>
+            <div style="display:flex;gap:6px;margin-top:8px">
+              <span id="suggestionConfidence" class="badge badge-primary"></span>
+            </div>
+          </div>
+
+          <!-- Barra de upload -->
+          <div id="uploadProgress" style="display:none;margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:4px">
+              <span>Enviando para o Google Drive…</span>
+              <span id="progressPct">0%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-bar-fill" id="progressBar" style="width:0%"></div></div>
+          </div>
+        </div>
+
+        <!-- Arquivos enviados recentemente -->
+        <div id="recentUploads" style="display:none">
+          <h4 style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:10px">Enviados nesta sessão</h4>
+          <div id="recentList" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
+      </div>
+
+      <!-- Metadados -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;height:fit-content">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #c3c6d7">
+          <span class="material-symbols-outlined" style="color:#004ac6">info</span>
+          <h4 style="font-size:16px;font-weight:600;color:#191c1e">Informações do arquivo</h4>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <!-- Nome final -->
+          <div class="filter-select">
+            <label>Nome do arquivo</label>
+            <input type="text" id="fName" placeholder="Título normalizado"
+              style="border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;
+                     color:var(--text-primary);outline:none;background:var(--surface);width:100%;transition:box-shadow .15s">
+          </div>
+
+          <!-- Categoria -->
+          <div class="filter-select">
+            <label>Área do conhecimento</label>
+            <select id="fCategory" style="border:1px solid var(--border);border-radius:8px;padding:9px 12px;
+              font-size:14px;color:var(--text-primary);outline:none;background:var(--surface);width:100%;cursor:pointer">
+              <option value="">Selecione…</option>
+            </select>
+          </div>
+
+          <!-- Autor + Ano -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="filter-select">
+              <label>Autor</label>
+              <input type="text" id="fAuthor" placeholder="Nome do autor"
+                style="border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;
+                       color:var(--text-primary);outline:none;background:var(--surface);width:100%">
+            </div>
+            <div class="filter-select">
+              <label>Ano</label>
+              <input type="number" id="fYear" placeholder="Ex: 2024" min="1900" max="2099"
+                style="border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;
+                       color:var(--text-primary);outline:none;background:var(--surface);width:100%">
+            </div>
+          </div>
+
+          <!-- Visibilidade -->
+          <div class="filter-select">
+            <label>Visibilidade</label>
+            <div style="display:flex;gap:16px;margin-top:4px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;color:#191c1e">
+                <input type="radio" name="visibility" value="private" checked style="accent-color:#004ac6"> Privado
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;color:#191c1e">
+                <input type="radio" name="visibility" value="public" style="accent-color:#004ac6"> Público
+              </label>
+            </div>
+          </div>
+
+          <!-- Nota -->
+          <div class="filter-select">
+            <label>Nota interna (opcional)</label>
+            <textarea id="fNote" placeholder="Contexto adicional…" rows="3"
+              style="border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;
+                     color:var(--text-primary);outline:none;background:var(--surface);width:100%;resize:none"></textarea>
+          </div>
+
+          <!-- Botão -->
+          <button class="btn-primary" id="uploadBtn" onclick="startUpload()"
+            style="width:100%;padding:14px;border-radius:12px;font-size:15px;margin-top:4px" disabled>
+            <span class="material-symbols-outlined" style="font-size:20px">cloud_upload</span>
+            Enviar para o Drive
+          </button>
+          <p style="text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase;
+             letter-spacing:.05em;font-weight:600">Respeite os direitos autorais</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="safe-bottom-pad"></div>
+  </main>
+</div>
+
+<?!= include('partials/bottomnav'); ?>
+<?!= include('scripts/app'); ?>
+
+<script>
+var selectedFile = null;
+
+// Grid em desktop
+if (window.innerWidth >= 768) {
+  document.getElementById('uploadGrid').style.gridTemplateColumns = '1fr 360px';
+}
+
+// Carrega categorias
+onDomReady(function() {
+  google.script.run.withSuccessHandler(function(res) {
+    if (!res || !res.ok) return;
+    var sel = document.getElementById('fCategory');
+    (res.categories || []).forEach(function(c) {
+      sel.innerHTML += '<option value="' + c.id + '">' + escHtml(c.name) + '</option>';
+    });
+  }).getCategories();
+});
+
+// Drag & drop
+var dz = document.getElementById('dropZone');
+['dragenter','dragover'].forEach(function(e) {
+  dz.addEventListener(e, function(ev) { ev.preventDefault(); dz.classList.add('drag-over'); });
+});
+['dragleave','drop'].forEach(function(e) {
+  dz.addEventListener(e, function(ev) { ev.preventDefault(); dz.classList.remove('drag-over'); });
+});
+dz.addEventListener('drop', function(ev) {
+  var f = ev.dataTransfer.files[0];
+  if (f) handleFileSelect(f);
+});
+
+function handleFileSelect(file) {
+  if (!file) return;
+  if (file.size > 50 * 1024 * 1024) {
+    showToast('Arquivo muito grande. Máximo: 50 MB', 'error');
+    return;
+  }
+  selectedFile = file;
+  document.getElementById('previewName').textContent = file.name;
+  document.getElementById('previewSize').textContent = fmtSize(file.size) + ' · ' + file.type;
+  document.getElementById('filePreview').style.display = 'block';
+  document.getElementById('uploadBtn').disabled = false;
+  document.getElementById('fName').value = '';
+  document.getElementById('nameSuggestion').style.display = 'none';
+
+  // Sugestão de nome via backend (pré-visualização segura)
+  google.script.run.withSuccessHandler(function(res) {
+    if (!res) return;
+    document.getElementById('fName').value = res.name || file.name;
+    document.getElementById('suggestedName').textContent = res.name || '';
+    document.getElementById('suggestionReason').textContent = res.reason || '';
+    document.getElementById('suggestionConfidence').textContent =
+      'Confiança: ' + Math.round((res.confidence || 0) * 100) + '%';
+    document.getElementById('nameSuggestion').style.display = 'block';
+  }).withFailureHandler(function(err){
+    document.getElementById('fName').value = file.name;
+    showToast('Não consegui sugerir nome agora. Usei o nome original.', 'error', 5000);
+  }).normalizeName(file.name);
+}
+
+function clearFile() {
+  selectedFile = null;
+  document.getElementById('filePreview').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('uploadBtn').disabled = true;
+}
+
+function startUpload() {
+  if (!selectedFile) return;
+  var accessToken = (window.REPOSITORY_SESSION && window.REPOSITORY_SESSION.accessToken) || sessionStorage.getItem('RE_ACCESS_TOKEN') || '';
+  if (!accessToken) {
+    showToast('Sessão expirada. Faça login novamente antes de enviar.', 'error', 7000);
+    return;
+  }
+  var btn = document.getElementById('uploadBtn');
+  setBtnLoading(btn, true, 'Enviando…');
+
+  // Mostra barra de progresso (simulada — GAS não tem progresso real)
+  document.getElementById('uploadProgress').style.display = 'block';
+  animateProgress();
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var b64 = e.target.result.split(',')[1];
+    var vis = document.querySelector('input[name="visibility"]:checked');
+    google.script.run
+      .withSuccessHandler(function(res) {
+        document.getElementById('uploadProgress').style.display = 'none';
+        setBtnLoading(btn, false);
+        if (res && res.ok) {
+          showToast('Arquivo enviado com sucesso!', 'success');
+          try { clearPageCache(); sessionStorage.removeItem('RE_CATEGORIES_CACHE'); } catch(_) {}
+          addToRecentList(res.fileId);
+          clearFile();
+        } else {
+          var msg = (res && (res.error || res.message || res.raw)) || 'Erro ao enviar.';
+          showToast(msg, 'error', 9000);
+          showUploadError(msg);
+        }
+      })
+      .withFailureHandler(function(err) {
+        document.getElementById('uploadProgress').style.display = 'none';
+        setBtnLoading(btn, false);
+        var msg = (err && err.message) || String(err || 'Erro inesperado no google.script.run');
+        showToast(msg, 'error', 9000);
+        showUploadError(msg);
+      })
+      .uploadFile({
+        base64:     b64,
+        fileName:   selectedFile.name,
+        mimeType:   selectedFile.type || 'application/octet-stream',
+        size:       selectedFile.size,
+        accessToken: accessToken,
+        categoryId: document.getElementById('fCategory').value || null,
+        author:     document.getElementById('fAuthor').value   || null,
+        year:       parseInt(document.getElementById('fYear').value) || null,
+        note:       document.getElementById('fNote').value || null,
+        visibility: vis ? vis.value : 'private',
+        finalName:  document.getElementById('fName').value.trim() || selectedFile.name,
+        fileType:   guessFileTypeClient_(selectedFile.name, selectedFile.type)
+      });
+  };
+  reader.readAsDataURL(selectedFile);
+}
+
+function animateProgress() {
+  var bar = document.getElementById('progressBar');
+  var pct = document.getElementById('progressPct');
+  var p = 0;
+  var interval = setInterval(function() {
+    p = Math.min(p + Math.random() * 8, 90);
+    bar.style.width = p + '%';
+    pct.textContent = Math.round(p) + '%';
+    if (p >= 90) clearInterval(interval);
+  }, 200);
+}
+
+function showUploadError(message) {
+  var preview = document.getElementById('filePreview');
+  if (!preview) return;
+  var old = document.getElementById('uploadErrorBox');
+  if (old) old.remove();
+  var el = document.createElement('div');
+  el.id = 'uploadErrorBox';
+  el.style.cssText = 'background:var(--error-container);border:1px solid var(--error);color:var(--on-error-container);border-radius:10px;padding:12px 14px;margin-top:12px;font-size:13px;white-space:pre-wrap';
+  el.innerHTML = '<b>Erro no upload:</b><br>' + escHtml(message || 'Erro desconhecido');
+  preview.appendChild(el);
+}
+
+function guessFileTypeClient_(name, mime) {
+  var ext = String(name || '').split('.').pop().toLowerCase();
+  if (mime === 'application/pdf' || ext === 'pdf') return 'document';
+  if (['ppt','pptx'].indexOf(ext) >= 0) return 'slide';
+  if (['jpg','jpeg','png','webp'].indexOf(ext) >= 0) return 'document';
+  if (['epub'].indexOf(ext) >= 0) return 'book';
+  return 'other';
+}
+
+function addToRecentList(fileId) {
+  document.getElementById('recentUploads').style.display = 'block';
+  var item = document.createElement('div');
+  item.style.cssText = 'background:var(--success-container);border:1px solid var(--success);border-radius:10px;padding:10px 14px;' +
+    'display:flex;align-items:center;gap:10px;font-size:13px;color:#065f46';
+  item.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px">check_circle</span>' +
+    '<span style="flex:1">Arquivo enviado com sucesso</span>' +
+    '<a href="?page=detalhe&id=' + fileId + '" data-spa-link="1" style="color:var(--primary);font-weight:600;font-size:12px">Ver detalhes</a>';
+  document.getElementById('recentList').prepend(item);
+}
+
+// Input focus
+document.querySelectorAll('input[type="text"],input[type="number"],textarea,select').forEach(function(el) {
+  el.addEventListener('focus',function(){ this.style.boxShadow='0 0 0 2px #004ac6'; this.style.borderColor='#004ac6'; });
+  el.addEventListener('blur', function(){ this.style.boxShadow=''; this.style.borderColor='#c3c6d7'; });
+});
+</script>
+</body>
+</html>

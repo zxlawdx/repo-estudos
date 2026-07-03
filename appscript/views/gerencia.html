@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?></head>
+<body class="bg-background">
+<?!= include('partials/sidebar'); ?>
+<div class="main-content">
+  <?!= include('partials/topbar'); ?>
+  <main class="page-content">
+    <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div><h2>Gerência</h2><p>Administração segura de usuários, roles, status e histórico recente.</p></div>
+      <button class="btn-secondary" onclick="loadAdminUsers()" style="border-radius:100px;padding:8px 14px"><span class="material-symbols-outlined">refresh</span> Atualizar</button>
+    </div>
+    <div id="adminError" style="display:none"></div>
+    <section id="adminContent" class="admin-shell">
+      <div class="admin-card">
+        <div class="admin-toolbar">
+          <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:240px"><span class="material-symbols-outlined" style="color:#004ac6">search</span><input id="adminSearch" type="search" class="form-control" placeholder="Buscar usuário por nome ou e-mail" oninput="debounceAdminSearch()"></div>
+          <span class="badge badge-primary">Somente admin</span>
+        </div>
+        <div id="adminUsersList" style="display:flex;flex-direction:column;gap:10px;padding:14px"><div class="skeleton" style="height:74px;border-radius:14px"></div><div class="skeleton" style="height:74px;border-radius:14px"></div></div>
+      </div>
+      <aside class="admin-card admin-side-panel">
+        <h3 style="font-size:17px;font-weight:800;margin:0 0 10px;color:var(--text-primary)">Detalhes</h3>
+        <div id="adminUserDetail"><p style="font-size:13px;color:var(--text-muted)">Selecione um usuário para ver materiais, trilhas e histórico recente.</p></div>
+      </aside>
+    </section>
+    <div class="safe-bottom-pad"></div>
+  </main>
+</div>
+<?!= include('partials/bottomnav'); ?>
+<?!= include('scripts/app'); ?>
+<script>
+var adminUsers=[], adminSearchTimer=null;
+function adminToken(){ return sessionStorage.getItem('RE_ACCESS_TOKEN') || ''; }
+onDomReady(function(){ loadAdminUsers(); });
+function debounceAdminSearch(){ clearTimeout(adminSearchTimer); adminSearchTimer=setTimeout(loadAdminUsers,300); }
+function loadAdminUsers(){
+  document.getElementById('adminError').style.display='none';
+  google.script.run.withSuccessHandler(function(res){
+    if(!res||!res.ok){ renderPermissionOrError((res&&res.error)||'Sem permissão', res&&res.stack); return; }
+    adminUsers=res.users||[]; renderAdminUsers(res.currentAdminId);
+  }).withFailureHandler(function(e){ renderPermissionOrError((e&&e.message)||String(e), e&&e.stack); }).getAdminUsers({accessToken:adminToken(),search:document.getElementById('adminSearch').value,limit:200});
+}
+function renderPermissionOrError(message, stack){
+  var isPerm=String(message||'').toLowerCase().indexOf('permiss')!==-1;
+  document.getElementById('adminContent').style.display=isPerm?'none':'grid';
+  var el=document.getElementById('adminError'); el.style.display='block';
+  el.innerHTML='<div class="'+(isPerm?'permission-denied':'settings-card')+'"><div class="badge badge-rejected">'+(isPerm?'PERMISSÃO NEGADA':'ERRO VISÍVEL')+'</div><h2 style="color:#ba1a1a;font-size:22px;margin:10px 0 8px">'+(isPerm?'Área restrita a administradores':'Erro na gerência')+'</h2><p>'+escHtml(message||'Não foi possível carregar a gerência.')+'</p>'+(stack?'<pre style="white-space:pre-wrap;background:#111;color:#fff;padding:14px;border-radius:12px;overflow:auto;max-height:240px">'+escHtml(stack)+'</pre>':'')+'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px"><button class="btn-primary" onclick="navigate(\'dashboard\')">Dashboard</button><button class="btn-secondary" onclick="navigate(\'biblioteca\')">Biblioteca</button><button class="btn-danger" onclick="loadAdminUsers()">Tentar novamente</button></div></div>';
+}
+function renderAdminUsers(currentAdminId){
+  document.getElementById('adminContent').style.display='grid';
+  var box=document.getElementById('adminUsersList');
+  if(!adminUsers.length){box.innerHTML='<p style="font-size:13px;color:var(--text-muted)">Nenhum usuário encontrado.</p>';return;}
+  box.innerHTML=adminUsers.map(function(u){return '<article class="admin-user-card"><div style="min-width:0"><div style="display:flex;align-items:center;gap:10px;min-width:0"><div class="shell-avatar" style="width:38px;height:38px;flex-shrink:0">'+(u.avatar_url?'<img src="'+escHtml(u.avatar_url)+'" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" alt="Foto">':'<span>'+escHtml((u.display_name||u.email||'U').charAt(0).toUpperCase())+'</span>')+'</div><div style="min-width:0"><b style="display:block;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(u.display_name||'Sem nome')+'</b><small style="color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">'+escHtml(u.email||'E-mail não salvo no perfil')+'</small></div></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><span class="badge badge-primary">'+escHtml(u.role)+'</span><span class="badge '+(u.status==='active'?'badge-approved':'badge-rejected')+'">'+escHtml(u.status)+'</span><span class="badge badge-secondary">Criado '+escHtml(fmtDate(u.created_at))+'</span>'+(u.last_seen_at?'<span class="badge badge-secondary">Último acesso '+escHtml(fmtDate(u.last_seen_at))+'</span>':'')+'</div></div><div class="admin-user-actions"><select class="form-control" onchange="changeManagedUser(\''+u.id+'\',\'role\',this.value)" '+(u.id===currentAdminId?'title="Cuidado ao alterar sua própria role"':'')+'><option value="viewer" '+(u.role==='viewer'?'selected':'')+'>viewer</option><option value="editor" '+(u.role==='editor'?'selected':'')+'>editor</option><option value="admin" '+(u.role==='admin'?'selected':'')+'>admin</option></select><select class="form-control" onchange="changeManagedUser(\''+u.id+'\',\'status\',this.value)"><option value="active" '+(u.status==='active'?'selected':'')+'>ativo</option><option value="inactive" '+(u.status==='inactive'?'selected':'')+'>inativo</option><option value="suspended" '+(u.status==='suspended'?'selected':'')+'>suspenso</option></select><button class="btn-secondary" onclick="loadAdminUserDetail(\''+u.id+'\')" style="border-radius:999px;padding:8px 12px">Detalhes</button></div></article>';}).join('');
+}
+function changeManagedUser(id, field, value){
+  var payload={accessToken:adminToken(),profileId:id}; payload[field]=value;
+  google.script.run.withSuccessHandler(function(res){ if(res&&res.ok){showToast('Usuário atualizado.','success');loadAdminUsers();} else {showToast((res&&res.error)||'Erro ao atualizar usuário.','error',8000);loadAdminUsers();} }).withFailureHandler(function(e){showToast((e&&e.message)||String(e),'error',8000);loadAdminUsers();}).updateManagedUser(payload);
+}
+function loadAdminUserDetail(id){
+  var box=document.getElementById('adminUserDetail'); box.innerHTML='<div class="skeleton" style="height:150px;border-radius:14px"></div>';
+  google.script.run.withSuccessHandler(function(res){ if(!res||!res.ok){box.innerHTML='<div class="badge badge-rejected">'+escHtml((res&&res.error)||'Erro')+'</div>';return;} renderAdminUserDetail(res); }).withFailureHandler(function(e){box.innerHTML='<div class="badge badge-rejected">'+escHtml((e&&e.message)||String(e))+'</div>';}).getAdminUserDetail({accessToken:adminToken(),profileId:id});
+}
+function renderAdminUserDetail(res){
+  var p=res.profile||{}; var html='<h3 class="graph-details-title">'+escHtml(p.display_name||'Usuário')+'</h3><div class="graph-meta-list"><div class="graph-meta-row"><b>E-mail</b><span>'+escHtml(p.email||'—')+'</span></div><div class="graph-meta-row"><b>Role</b><span>'+escHtml(p.role||'viewer')+'</span></div><div class="graph-meta-row"><b>Status</b><span>'+escHtml(p.status||'active')+'</span></div><div class="graph-meta-row"><b>Criado</b><span>'+escHtml(fmtDate(p.created_at))+'</span></div><div class="graph-meta-row"><b>Último acesso</b><span>'+escHtml(fmtDate(p.last_seen_at))+'</span></div></div>';
+  html+=sectionList('Materiais enviados',res.files||[],function(f){return escHtml(f.final_name||f.suggested_name||f.original_name||'Material')+' <small>'+escHtml(f.status||'')+'</small>';});
+  html+=sectionList('Trilhas criadas',res.paths||[],function(t){return escHtml(t.title||'Trilha')+' <small>'+escHtml(t.visibility||'')+'</small>';});
+  html+=sectionList('Histórico recente',res.history||[],function(h){return escHtml(h.action||'ação')+' <small>'+escHtml(fmtDate(h.created_at))+'</small>';});
+  html+=sectionList('Auditoria',res.audits||[],function(a){return escHtml(a.action||'ação')+' <small>'+escHtml(a.target_type||'')+' · '+escHtml(fmtDate(a.created_at))+'</small>';});
+  document.getElementById('adminUserDetail').innerHTML=html;
+}
+function sectionList(title,rows,fn){ var html='<h4 style="font-size:14px;font-weight:800;margin:18px 0 8px;color:var(--text-primary)">'+escHtml(title)+'</h4>'; if(!rows.length) return html+'<p style="font-size:12px;color:var(--text-muted)">Nada encontrado.</p>'; return html+'<div style="display:flex;flex-direction:column;gap:8px">'+rows.map(function(r){return '<div style="border:1px solid var(--border);border-radius:12px;padding:9px;font-size:12px">'+fn(r)+'</div>';}).join('')+'</div>'; }
+</script>
+</body>
+</html>

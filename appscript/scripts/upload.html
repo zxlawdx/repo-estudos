@@ -1,0 +1,156 @@
+<script>
+// ============================================================
+// upload.js — Script específico da view Upload
+// ============================================================
+
+var UPLOAD = (function() {
+  var _file      = null;
+  var _sessions  = [];
+  var _progTimer = null;
+
+  /** Inicializa drag & drop e eventos */
+  function init() {
+    var dz = document.getElementById('dropZone');
+    if (!dz) return;
+    ['dragenter','dragover'].forEach(function(e) {
+      dz.addEventListener(e, function(ev) { ev.preventDefault(); dz.classList.add('drag-over'); });
+    });
+    ['dragleave','drop'].forEach(function(e) {
+      dz.addEventListener(e, function(ev) { ev.preventDefault(); dz.classList.remove('drag-over'); });
+    });
+    dz.addEventListener('drop', function(ev) {
+      var f = ev.dataTransfer.files[0];
+      if (f) onFileSelected(f);
+    });
+  }
+
+  function onFileSelected(file) {
+    var MAX = 50 * 1024 * 1024;
+    if (file.size > MAX) { showToast('Arquivo maior que 50 MB.', 'error'); return; }
+    _file = file;
+    var nameEl = document.getElementById('previewName');
+    var sizeEl = document.getElementById('previewSize');
+    var box    = document.getElementById('filePreview');
+    if (nameEl) nameEl.textContent = file.name;
+    if (sizeEl) sizeEl.textContent = fmtSize(file.size) + ' · ' + (file.type || 'unknown');
+    if (box)    box.style.display  = 'block';
+    var btn = document.getElementById('uploadBtn');
+    if (btn) btn.disabled = false;
+
+    // Pré-visualiza sugestão de nome
+    google.script.run.withSuccessHandler(function(res) {
+      if (!res) return;
+      var nameInput = document.getElementById('fName');
+      if (nameInput && !nameInput.value) nameInput.value = res.name || '';
+      var sugBox  = document.getElementById('nameSuggestion');
+      var sugName = document.getElementById('suggestedName');
+      var sugReas = document.getElementById('suggestionReason');
+      var sugConf = document.getElementById('suggestionConfidence');
+      if (sugBox)  sugBox.style.display  = 'block';
+      if (sugName) sugName.textContent   = res.name || '';
+      if (sugReas) sugReas.textContent   = res.reason || '';
+      if (sugConf) sugConf.textContent   = 'Confiança: ' + Math.round((res.confidence || 0) * 100) + '%';
+    }).withFailureHandler(function(){ var nameInput = document.getElementById('fName'); if (nameInput && !nameInput.value) nameInput.value = file.name; }).normalizeName(file.name);
+  }
+
+  function clearFile() {
+    _file = null;
+    var box = document.getElementById('filePreview');
+    var inp = document.getElementById('fileInput');
+    var btn = document.getElementById('uploadBtn');
+    if (box) box.style.display = 'none';
+    if (inp) inp.value = '';
+    if (btn) btn.disabled = true;
+  }
+
+  function startUpload() {
+    if (!_file) return;
+    var accessToken = (window.REPOSITORY_SESSION && window.REPOSITORY_SESSION.accessToken) || sessionStorage.getItem('RE_ACCESS_TOKEN') || '';
+    if (!accessToken) { showToast('Sessão expirada. Faça login novamente antes de enviar.', 'error', 7000); return; }
+    var btn = document.getElementById('uploadBtn');
+    setBtnLoading(btn, true, 'Enviando…');
+    var progBox = document.getElementById('uploadProgress');
+    if (progBox) progBox.style.display = 'block';
+    _animateProgress();
+
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var b64 = e.target.result.split(',')[1];
+      var vis = document.querySelector('input[name="visibility"]:checked');
+      google.script.run
+        .withSuccessHandler(function(res) {
+          clearInterval(_progTimer);
+          if (progBox) progBox.style.display = 'none';
+          setBtnLoading(btn, false);
+          if (res && res.ok) {
+            showToast('Enviado com sucesso!', 'success');
+            try { clearPageCache(); } catch(_) {}
+            _sessions.push(res.fileId);
+            _appendSessionItem(res.fileId);
+            clearFile();
+          } else {
+            showToast((res && res.error) || 'Erro ao enviar.', 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          clearInterval(_progTimer);
+          if (progBox) progBox.style.display = 'none';
+          setBtnLoading(btn, false);
+          showToast(err.message, 'error');
+        })
+        .uploadFile({
+          base64:     b64,
+          fileName:   _file.name,
+          mimeType:   _file.type || 'application/octet-stream',
+          size:       _file.size,
+          accessToken: accessToken,
+          categoryId: (document.getElementById('fCategory') || {}).value || null,
+          author:     (document.getElementById('fAuthor')   || {}).value || null,
+          year:       parseInt((document.getElementById('fYear') || {}).value) || null,
+          note:       (document.getElementById('fNote') || {}).value || null,
+          visibility: vis ? vis.value : 'private',
+          finalName:  (document.getElementById('fName') || {}).value || _file.name,
+          fileType:   _guessFileType(_file.name, _file.type)
+        });
+    };
+    reader.readAsDataURL(_file);
+  }
+
+  function _guessFileType(name, mime) {
+    var ext = String(name || '').split('.').pop().toLowerCase();
+    if (mime === 'application/pdf' || ext === 'pdf') return 'document';
+    if (['ppt','pptx'].indexOf(ext) >= 0) return 'slide';
+    if (['epub'].indexOf(ext) >= 0) return 'book';
+    return 'other';
+  }
+
+  function _animateProgress() {
+    var bar = document.getElementById('progressBar');
+    var pct = document.getElementById('progressPct');
+    var p   = 0;
+    _progTimer = setInterval(function() {
+      p = Math.min(p + Math.random() * 6 + 1, 90);
+      if (bar) bar.style.width  = p + '%';
+      if (pct) pct.textContent  = Math.round(p) + '%';
+    }, 250);
+  }
+
+  function _appendSessionItem(fileId) {
+    var wrap = document.getElementById('recentUploads');
+    var list = document.getElementById('recentList');
+    if (!wrap || !list) return;
+    wrap.style.display = 'block';
+    var el = document.createElement('div');
+    el.style.cssText = 'background:#d1fae5;border:1px solid #a7f3d0;border-radius:10px;' +
+      'padding:10px 14px;display:flex;align-items:center;gap:10px;font-size:13px;color:#065f46';
+    el.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px">check_circle</span>' +
+      '<span style="flex:1">Upload concluído</span>' +
+      '<a href="?page=detalhe&id=' + fileId + '" style="color:#004ac6;font-weight:600;font-size:12px;text-decoration:none">Ver detalhes</a>';
+    list.prepend(el);
+  }
+
+  return { init, onFileSelected, clearFile, startUpload };
+})();
+
+onDomReady(UPLOAD.init);
+</script>

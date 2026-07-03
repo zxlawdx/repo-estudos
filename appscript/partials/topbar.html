@@ -1,0 +1,91 @@
+<!-- TopBar -->
+<header class="topbar">
+  <!-- Menu btn (mobile) -->
+  <button class="topbar-btn" onclick="openSidebar()" style="display:none" id="menuBtn" aria-label="Menu">
+    <span class="material-symbols-outlined">menu</span>
+  </button>
+
+  <!-- Search -->
+  <div class="topbar-search" style="margin-left:0">
+    <span class="material-symbols-outlined">search</span>
+    <input type="text" id="globalSearch" placeholder="Pesquisar… (⌘K)"
+           autocomplete="off" aria-label="Pesquisar">
+  </div>
+
+  <!-- Actions -->
+  <div class="topbar-actions">
+    <a href="?page=upload" class="btn-primary" style="border-radius:100px;padding:8px 18px;text-decoration:none;display:none" id="topbarUploadBtn">
+      <span class="material-symbols-outlined" style="font-size:18px">add</span>
+      Upload
+    </a>
+    <!-- Toggle de tema -->
+    <button class="topbar-btn" id="themeToggleBtn" aria-label="Alternar tema" onclick="toggleTheme()" title="Alternar modo claro/escuro">
+      <span class="material-symbols-outlined" id="themeIcon">dark_mode</span>
+    </button>
+    <button class="topbar-btn" aria-label="Notificações">
+      <span class="material-symbols-outlined">notifications</span>
+    </button>
+    <button class="topbar-btn" id="profileBtn" aria-label="Perfil" onclick="navigate('perfil')" style="overflow:hidden">
+      <span id="topbarAvatar" class="shell-avatar shell-avatar-sm"><span class="material-symbols-outlined">account_circle</span></span>
+    </button>
+  </div>
+</header>
+
+<script>
+// Mostrar menu button + upload btn em resolução menor
+(function() {
+  function checkWidth() {
+    const isMobile = window.innerWidth < 768;
+    var menu = document.getElementById('menuBtn'); if (menu) menu.style.display = isMobile ? 'flex' : 'none';
+    var up = document.getElementById('topbarUploadBtn'); if (up) up.style.display = isMobile ? 'none' : 'flex';
+  }
+  checkWidth();
+  window.addEventListener('resize', checkWidth);
+})();
+
+// Atalho de teclado
+if (!window.__RE_TOPBAR_SHORTCUT__) {
+  window.__RE_TOPBAR_SHORTCUT__ = true;
+  document.addEventListener('keydown', function(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      var gs = document.getElementById('globalSearch'); if (gs) gs.focus();
+    }
+  });
+}
+try { setTimeout(function(){ hydrateShellUser_ && hydrateShellUser_(); }, 0); } catch(_) {}
+
+// ---- Tema claro/escuro ----
+if (!window.__RE_THEME_INIT__) {
+  window.__RE_THEME_INIT__ = true;
+
+  function applyTheme(dark) {
+    var html = document.documentElement;
+    if (dark) html.classList.add('dark');
+    else      html.classList.remove('dark');
+    try { localStorage.setItem('RE_THEME', dark ? 'dark' : 'light'); } catch(_) {}
+    var icon = document.getElementById('themeIcon');
+    if (icon) icon.textContent = dark ? 'light_mode' : 'dark_mode';
+  }
+
+  function toggleTheme() {
+    applyTheme(!document.documentElement.classList.contains('dark'));
+  }
+
+  // Sincronizar ícone com tema atual ao carregar
+  (function syncIcon() {
+    var dark = document.documentElement.classList.contains('dark');
+    var icon = document.getElementById('themeIcon');
+    if (icon) icon.textContent = dark ? 'light_mode' : 'dark_mode';
+  })();
+
+  // Ouvir mudança de preferência do sistema
+  try {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+      var saved = '';
+      try { saved = localStorage.getItem('RE_THEME') || ''; } catch(_) {}
+      if (!saved) applyTheme(e.matches); // só segue sistema se o usuário não escolheu
+    });
+  } catch(_) {}
+}
+</script>

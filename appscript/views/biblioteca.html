@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?></head>
+<body class="bg-background">
+
+<?!= include('partials/sidebar'); ?>
+<div class="main-content">
+  <?!= include('partials/topbar'); ?>
+
+  <main class="page-content">
+    <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div>
+        <h2>Minha Biblioteca</h2>
+        <p>Gerencie seus materiais acadêmicos.</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:4px;background:var(--surface-low);border:1px solid var(--border);border-radius:10px;padding:3px">
+          <button onclick="setView('grid')" id="btnGrid" class="btn-secondary active-scale"
+            style="padding:6px 10px;border-radius:8px;border:none;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.08)">
+            <span class="material-symbols-outlined" style="font-size:20px">grid_view</span>
+          </button>
+          <button onclick="setView('list')" id="btnList" class="btn-secondary active-scale"
+            style="padding:6px 10px;border-radius:8px;border:none;background:transparent">
+            <span class="material-symbols-outlined" style="font-size:20px">view_list</span>
+          </button>
+        </div>
+        <a href="?page=cadastrar-link" class="btn-secondary" style="border-radius:100px;padding:8px 14px;text-decoration:none">
+          <span class="material-symbols-outlined" style="font-size:18px">add_link</span> Link
+        </a>
+        <a href="?page=upload" class="btn-primary" style="border-radius:100px;padding:8px 18px;text-decoration:none">
+          <span class="material-symbols-outlined" style="font-size:18px">add</span> Upload
+        </a>
+      </div>
+    </div>
+
+    <!-- Chips de filtro rápido -->
+    <div class="chips-row">
+      <button class="filter-chip active" onclick="setChip(this,'all')">Todos</button>
+      <button class="filter-chip" onclick="setChip(this,'book')">
+        <span class="material-symbols-outlined" style="font-size:14px">menu_book</span> Livros
+      </button>
+      <button class="filter-chip" onclick="setChip(this,'article')">Artigos</button>
+      <button class="filter-chip" onclick="setChip(this,'slide')">Slides</button>
+      <button class="filter-chip" onclick="setChip(this,'video')"><span class="material-symbols-outlined" style="font-size:14px">smart_display</span> Vídeos</button>
+      <button class="filter-chip" onclick="setChip(this,'playlist')"><span class="material-symbols-outlined" style="font-size:14px">video_library</span> Playlists</button>
+      <button class="filter-chip" onclick="setChip(this,'external_link')"><span class="material-symbols-outlined" style="font-size:14px">link</span> Links</button>
+      <button class="filter-chip" onclick="setChip(this,'test')">Provas</button>
+      <button class="filter-chip" onclick="setChip(this,'summary')">Resumos</button>
+      <button class="filter-chip" onclick="setChip(this,'pending')" id="chipPending">
+        <span class="material-symbols-outlined" style="font-size:14px">pending</span> Pendentes
+      </button>
+    </div>
+
+    <!-- Filtros avançados (accordion) -->
+    <div class="filter-accordion">
+      <div class="filter-accordion-header" onclick="toggleAccordion(this)">
+        <span><span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:6px">tune</span>Filtros avançados</span>
+        <span class="material-symbols-outlined">expand_more</span>
+      </div>
+      <div class="filter-accordion-body">
+        <div class="filter-bar" style="margin-bottom:0;margin-top:12px">
+          <div class="filter-select">
+            <label>Área</label>
+            <select id="fCategory" onchange="applyFilters()">
+              <option value="">Todas as áreas</option>
+            </select>
+          </div>
+          <div class="filter-select">
+            <label>Status</label>
+            <select id="fStatus" onchange="applyFilters()">
+              <option value="">Todos</option>
+              <option value="pending">Pendente</option>
+              <option value="approved">Aprovado</option>
+              <option value="rejected">Rejeitado</option>
+            </select>
+          </div>
+          <div class="filter-select">
+            <label>Visibilidade</label>
+            <select id="fVisibility" onchange="applyFilters()">
+              <option value="">Qualquer</option>
+              <option value="public">Público</option>
+              <option value="private">Privado</option>
+            </select>
+          </div>
+          <div class="filter-select">
+            <label>Busca</label>
+            <input type="text" id="fSearch" placeholder="Título, autor…"
+              style="border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;
+                     color:var(--text-primary);outline:none;background:var(--surface);width:100%"
+              oninput="debounceSearch(this.value)">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grade / Lista de arquivos -->
+    <div class="bento-grid" id="filesGrid">
+      <? for(var i=0;i<6;i++) { ?>
+      <div class="skeleton" style="height:220px;border-radius:16px"></div>
+      <? } ?>
+    </div>
+
+    <!-- Empty state -->
+    <div id="emptyState" class="empty-state" style="display:none">
+      <span class="material-symbols-outlined">folder_open</span>
+      <h3 style="font-size:17px;font-weight:600;color:var(--text-primary);margin:8px 0 4px">Nenhum arquivo encontrado</h3>
+      <p>Tente ajustar os filtros ou <a href="?page=upload" style="color:#004ac6">faça um upload</a>.</p>
+    </div>
+
+    <!-- Paginação -->
+    <div id="pagination" style="display:none;justify-content:center;gap:8px;margin-top:24px;flex-wrap:wrap"></div>
+
+    <div class="safe-bottom-pad"></div>
+  </main>
+</div>
+
+<?!= include('partials/bottomnav'); ?>
+<?!= include('scripts/app'); ?>
+
+<script>
+var STATE = { view: 'grid', page: 1, chip: 'all', filters: {} };
+var searchTimer;
+
+onDomReady(function() {
+  loadCategories();
+  loadFiles();
+});
+
+function loadCategories() {
+  google.script.run.withSuccessHandler(function(res) {
+    if (!res || !res.ok) return;
+    var sel = document.getElementById('fCategory');
+    (res.categories || []).forEach(function(c) {
+      sel.innerHTML += '<option value="' + c.id + '">' + escHtml(c.name) + '</option>';
+    });
+  }).getCategories();
+}
+
+function loadFiles() {
+  var grid = document.getElementById('filesGrid');
+  grid.innerHTML = '<div class="skeleton" style="height:220px;border-radius:16px"></div>'.repeat(6);
+  document.getElementById('emptyState').style.display = 'none';
+
+  var f = Object.assign({}, STATE.filters, { page: STATE.page, limit: 12, accessToken: sessionStorage.getItem('RE_ACCESS_TOKEN') || '' });
+  if (STATE.chip && STATE.chip !== 'all') {
+    if (['book','article','slide','test','summary','document','notes','dataset','other','video','playlist','external_link'].includes(STATE.chip)) {
+      f.fileType = STATE.chip;
+    } else if (STATE.chip === 'pending') {
+      f.status = 'pending';
+    }
+  }
+
+  google.script.run
+    .withSuccessHandler(renderFiles)
+    .withFailureHandler(function(e) { document.getElementById('filesGrid').innerHTML=''; document.getElementById('pagination').style.display='none'; showToast((e&&e.message)||String(e),'error'); })
+    .getFiles(f);
+}
+
+function renderFiles(data) {
+  var grid = document.getElementById('filesGrid');
+  if (!data || !data.ok || !data.files || data.files.length === 0) {
+    grid.innerHTML = '';
+    document.getElementById('emptyState').style.display = 'flex';
+    renderPagination(data || { page: STATE.page, hasPrev: STATE.page > 1, hasNext: false });
+    return;
+  }
+  document.getElementById('emptyState').style.display = 'none';
+
+  if (STATE.view === 'grid') {
+    grid.style.display = '';
+    grid.innerHTML = data.files.map(renderFileCard).join('');
+  } else {
+    grid.style.display = 'block';
+    grid.innerHTML = '<div style="display:flex;flex-direction:column;gap:8px">' +
+      data.files.map(renderFileRow).join('') + '</div>';
+  }
+  renderPagination(data);
+}
+
+function renderPagination(data) {
+  var box = document.getElementById('pagination');
+  var page = (data && data.page) || STATE.page || 1;
+  var hasPrev = !!(data && data.hasPrev) || page > 1;
+  var hasNext = !!(data && data.hasNext);
+  if (!hasPrev && !hasNext) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'flex';
+  box.innerHTML =
+    '<button class="btn-secondary" '+(!hasPrev?'disabled':'')+' onclick="changePage(-1)" style="border-radius:100px;padding:8px 16px"><span class="material-symbols-outlined" style="font-size:17px">chevron_left</span> Anterior</button>' +
+    '<span class="badge badge-secondary" style="align-self:center;padding:8px 14px">Página ' + escHtml(page) + '</span>' +
+    '<button class="btn-secondary" '+(!hasNext?'disabled':'')+' onclick="changePage(1)" style="border-radius:100px;padding:8px 16px">Próxima <span class="material-symbols-outlined" style="font-size:17px">chevron_right</span></button>';
+}
+
+function changePage(delta) {
+  var next = Math.max(1, (STATE.page || 1) + delta);
+  if (next === STATE.page) return;
+  STATE.page = next;
+  loadFiles();
+}
+
+function renderFileCard(f) {
+  var name = escHtml(f.final_name || f.suggested_name || f.original_name);
+  var cat  = (f.categories && f.categories.name) ? escHtml(f.categories.name) : '';
+  return '<div class="file-card" onclick="navigate(\'detalhe\',{id:\'' + f.id + '\'})">' +
+    '<div class="file-card-header"><div class="file-card-badges">' + fileTypeBadge(f.file_type) +
+    (cat ? '<span class="badge badge-secondary">' + cat + '</span>' : '') + '</div>' +
+    statusBadge(f.status) + '</div>' +
+    '<div class="file-card-title">' + name + '</div>' +
+    '<div class="file-card-subtitle">' + escHtml(f.original_name) + '</div>' +
+    '<div class="file-card-meta">' +
+    (f.author ? '<div class="file-meta-item"><label>Autor</label><span>' + escHtml(f.author) + '</span></div>' : '') +
+    (f.year   ? '<div class="file-meta-item"><label>Ano</label><span>'   + f.year             + '</span></div>' : '') +
+    '</div>' +
+    '<div class="file-card-actions">' +
+    '<button class="btn-primary" onclick="event.stopPropagation();navigate(\'detalhe\',{id:\'' + f.id + '\'})">Abrir</button>' +
+    (f.google_drive_preview_url ?
+      '<a href="' + f.google_drive_preview_url + '" target="_blank" onclick="event.stopPropagation()" class="btn-secondary" style="text-decoration:none">' +
+      '<span class="material-symbols-outlined" style="font-size:18px">open_in_new</span></a>' : '') +
+    '</div>' +
+  '</div>';
+}
+
+function renderFileRow(f) {
+  var name = escHtml(f.final_name || f.suggested_name || f.original_name);
+  return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;' +
+    'display:flex;align-items:center;gap:12px;cursor:pointer;transition:box-shadow .15s" ' +
+    'class="hover-lift" onclick="navigate(\'detalhe\',{id:\'' + f.id + '\'})">' +
+    '<div style="flex-shrink:0">' + fileTypeBadge(f.file_type) + '</div>' +
+    '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--text-primary);' +
+    'overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + name + '</div>' +
+    '<div style="font-size:12px;color:#737686">' + escHtml(f.original_name) + '</div></div>' +
+    statusBadge(f.status) + '<span style="font-size:12px;color:var(--text-muted);flex-shrink:0">' + fmtDate(f.created_at) + '</span>' +
+    '<span class="material-symbols-outlined" style="color:#c3c6d7;font-size:20px">chevron_right</span>' +
+  '</div>';
+}
+
+function setView(v) {
+  STATE.view = v;
+  document.getElementById('btnGrid').style.cssText += ';background:' + (v==='grid'?'#fff;box-shadow:0 1px 3px rgba(0,0,0,.08)':'transparent;box-shadow:none');
+  document.getElementById('btnList').style.cssText += ';background:' + (v==='list'?'#fff;box-shadow:0 1px 3px rgba(0,0,0,.08)':'transparent;box-shadow:none');
+  loadFiles();
+}
+
+function setChip(el, chip) {
+  document.querySelectorAll('.filter-chip').forEach(function(c) { c.classList.remove('active'); });
+  el.classList.add('active');
+  STATE.chip = chip;
+  STATE.page = 1;
+  loadFiles();
+}
+
+function applyFilters() {
+  STATE.filters = {
+    categoryId: document.getElementById('fCategory').value   || undefined,
+    status:     document.getElementById('fStatus').value     || undefined,
+    visibility: document.getElementById('fVisibility').value || undefined,
+    search:     document.getElementById('fSearch').value     || undefined,
+  };
+  STATE.page = 1;
+  loadFiles();
+}
+
+function debounceSearch(val) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(function() {
+    STATE.filters.search = val || undefined;
+    STATE.page = 1;
+    loadFiles();
+  }, 350);
+}
+
+function toggleAccordion(header) {
+  header.classList.toggle('open');
+  var body = header.nextElementSibling;
+  body.classList.toggle('open');
+}
+</script>
+</body>
+</html>

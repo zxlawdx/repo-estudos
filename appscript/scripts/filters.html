@@ -1,0 +1,71 @@
+<script>
+// ============================================================
+// filters.js — Filtros genéricos reutilizáveis
+// ============================================================
+
+var FILTERS = (function() {
+  function initAccordion(headerId, bodyId) {
+    var header = document.getElementById(headerId);
+    var body   = document.getElementById(bodyId);
+    if (!header || !body) return;
+    header.addEventListener('click', function() {
+      var open = header.classList.toggle('open');
+      body.classList.toggle('open', open);
+      var icon = header.querySelector('.material-symbols-outlined');
+      if (icon) icon.style.transform = open ? 'rotate(180deg)' : '';
+    });
+  }
+
+  function initChips(containerSel, onChange) {
+    var container = document.querySelector(containerSel);
+    if (!container) return;
+    container.addEventListener('click', function(e) {
+      var chip = e.target.closest('.filter-chip');
+      if (!chip) return;
+      container.querySelectorAll('.filter-chip').forEach(function(c) { c.classList.remove('active'); });
+      chip.classList.add('active');
+      if (onChange) onChange(chip.dataset.value || chip.textContent.trim().toLowerCase());
+    });
+  }
+
+  function initSearch(inputId, onChange, delay) {
+    delay = delay || 350;
+    var inp = document.getElementById(inputId);
+    if (!inp) return;
+    var timer;
+    inp.addEventListener('input', function() {
+      clearTimeout(timer);
+      timer = setTimeout(function() { if (onChange) onChange(inp.value.trim()); }, delay);
+    });
+  }
+
+  function populateSelect(selectId, items, placeholder) {
+    var sel = document.getElementById(selectId);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">' + (placeholder || 'Todos') + '</option>' +
+      (items || []).map(function(it) {
+        return '<option value="' + it.value + '">' + escHtml(it.label) + '</option>';
+      }).join('');
+  }
+
+  function getValues(fieldIds) {
+    var out = {};
+    (fieldIds || []).forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) out[id] = el.value || undefined;
+    });
+    return out;
+  }
+
+  function reset(fieldIds) {
+    (fieldIds || []).forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      if (el.tagName === 'SELECT') el.selectedIndex = 0;
+      else el.value = '';
+    });
+  }
+
+  return { initAccordion, initChips, initSearch, populateSelect, getValues, reset };
+})();
+</script>

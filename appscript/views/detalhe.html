@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head><?!= include('partials/head'); ?></head>
+<body class="bg-background">
+
+<?!= include('partials/sidebar'); ?>
+<div class="main-content">
+  <?!= include('partials/topbar'); ?>
+
+  <main class="page-content">
+    <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="navigate('biblioteca')" class="btn-secondary" style="border-radius:100px;padding:7px 16px;display:inline-flex;align-items:center;gap:6px;font-size:13px">
+        <span class="material-symbols-outlined" style="font-size:18px">arrow_back</span> Biblioteca
+      </button>
+      <button onclick="loadDetail(true)" class="btn-secondary" style="border-radius:100px;padding:7px 16px;display:inline-flex;align-items:center;gap:6px;font-size:13px">
+        <span class="material-symbols-outlined" style="font-size:18px">refresh</span> Atualizar
+      </button>
+    </div>
+
+    <div id="detailError" style="display:none"></div>
+
+    <div id="skeleton">
+      <div class="skeleton" style="height:48px;border-radius:12px;width:60%;margin-bottom:16px"></div>
+      <div style="display:grid;grid-template-columns:1fr;gap:20px" id="detailSkeletonGrid">
+        <div class="skeleton" style="height:420px;border-radius:16px"></div>
+        <div class="skeleton" style="height:220px;border-radius:16px"></div>
+      </div>
+    </div>
+
+    <div id="detailContent" style="display:none">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px" id="fileBadges"></div>
+          <h1 id="fileTitle" style="font-size:clamp(22px,4vw,32px);font-weight:700;color:var(--text-primary);letter-spacing:-.02em;line-height:1.2;margin:0 0 6px 0;word-break:break-word"></h1>
+          <p id="fileOriginalName" style="font-size:14px;color:var(--text-muted);font-style:italic;word-break:break-word"></p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="btnReaderOpen" onclick="openReaderFromDetail()" class="btn-primary" style="border-radius:100px;padding:8px 18px;text-decoration:none;display:none;align-items:center;gap:6px;font-size:13px">
+            <span class="material-symbols-outlined" style="font-size:18px">auto_stories</span> Ler no app
+          </button>
+          <a id="btnExternalOpen" href="#" target="_blank" class="btn-secondary" style="border-radius:100px;padding:8px 18px;text-decoration:none;display:none;align-items:center;gap:6px;font-size:13px">
+            <span class="material-symbols-outlined" style="font-size:18px">open_in_new</span> Abrir link
+          </a>
+          <a id="btnDriveOpen" href="#" target="_blank" class="btn-secondary" style="border-radius:100px;padding:8px 18px;text-decoration:none;display:none;align-items:center;gap:6px;font-size:13px">
+            <span class="material-symbols-outlined" style="font-size:18px">open_in_new</span> Abrir no Drive
+          </a>
+          <a id="btnDownload" href="#" target="_blank" class="btn-primary" style="border-radius:100px;padding:8px 18px;text-decoration:none;display:none;align-items:center;gap:6px;font-size:13px">
+            <span class="material-symbols-outlined" style="font-size:18px">download</span> Baixar
+          </a>
+        </div>
+      </div>
+
+      <div id="detailGrid" style="display:grid;grid-template-columns:1fr;gap:20px">
+        <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+          <div id="previewBox" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden">
+            <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+              <span class="material-symbols-outlined" style="color:var(--primary);font-size:20px">preview</span>
+              <span style="font-size:14px;font-weight:600">Visualização</span>
+              <span style="margin-left:auto;font-size:12px;color:#737686">Google Drive</span>
+            </div>
+            <iframe id="previewIframe" style="width:100%;height:min(66vh,560px);border:none" loading="lazy" allow="autoplay"></iframe>
+          </div>
+
+          <div id="externalPlayerBox" class="external-link-card" style="display:none">
+            <div id="externalEmbedArea"></div>
+            <div class="external-link-hero">
+              <img id="externalThumb" class="external-link-thumb" style="display:none" alt="Thumbnail do material">
+              <div>
+                <div id="externalBadges" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+                <h3 id="externalTitle" style="font-size:17px;font-weight:800;margin:0 0 6px;color:#191c1e"></h3>
+                <p id="externalMeta" style="font-size:13px;color:var(--text-muted);margin:0 0 12px;word-break:break-word"></p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="externalWatchBtn" class="btn-primary" onclick="markWatching()" style="border-radius:999px;padding:9px 16px"><span class="material-symbols-outlined" style="font-size:18px">play_circle</span> Assistindo</button><a id="externalFallbackLink" href="#" target="_blank" class="btn-secondary" style="border-radius:999px;padding:9px 16px;text-decoration:none"><span class="material-symbols-outlined" style="font-size:18px">open_in_new</span> Abrir fora</a></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="noPreview" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:48px 24px;text-align:center">
+            <span class="material-symbols-outlined" style="font-size:48px;color:#c3c6d7;display:block;margin-bottom:12px">description</span>
+            <p style="color:var(--text-muted);font-size:14px">Preview não disponível para este tipo de arquivo.</p>
+            <a id="noPreviewLink" href="#" target="_blank" class="btn-primary" style="margin-top:12px;display:inline-flex;align-items:center;gap:6px;border-radius:100px;padding:9px 22px;text-decoration:none;font-size:14px">
+              <span class="material-symbols-outlined" style="font-size:18px">open_in_new</span> Abrir no Drive
+            </a>
+          </div>
+
+          <div class="settings-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px">
+              <h3 style="font-size:15px;font-weight:600;margin:0">Tags</h3>
+              <button onclick="openTagEditor()" class="btn-secondary" style="padding:5px 10px;border-radius:8px;font-size:12px"><span class="material-symbols-outlined" style="font-size:16px">edit</span> Editar</button>
+            </div>
+            <div id="tagsList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+          </div>
+
+          <div class="settings-card">
+            <h3 style="font-size:15px;font-weight:600;margin:0 0 14px">Histórico de alterações</h3>
+            <div id="historyList"></div>
+          </div>
+        </div>
+
+        <aside style="display:flex;flex-direction:column;gap:14px;min-width:0">
+          <div class="settings-card">
+            <h3 style="font-size:15px;font-weight:600;margin:0 0 12px;display:flex;align-items:center;gap:6px"><span class="material-symbols-outlined" style="font-size:18px;color:#004ac6">auto_stories</span> Meu Progresso</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="progressBtns"></div>
+          </div>
+
+          <div id="reviewActionsBox" class="settings-card" style="display:none"></div>
+
+          <div class="settings-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px">
+              <h3 style="font-size:15px;font-weight:600;margin:0">Informações</h3>
+              <button onclick="openEditModal()" class="btn-secondary" style="padding:5px 10px;border-radius:8px;font-size:12px"><span class="material-symbols-outlined" style="font-size:16px">edit</span> Editar</button>
+            </div>
+            <div id="metaList" style="display:flex;flex-direction:column;gap:10px"></div>
+          </div>
+
+          <div class="settings-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px">
+              <h3 style="font-size:15px;font-weight:600;margin:0;display:flex;align-items:center;gap:6px"><span class="material-symbols-outlined" style="font-size:18px;color:#004ac6">route</span> Trilhas vinculadas</h3>
+              <button onclick="openPathModal()" class="btn-secondary" style="padding:5px 10px;border-radius:8px;font-size:12px"><span class="material-symbols-outlined" style="font-size:16px">link</span> Vincular</button>
+            </div>
+            <div id="pathLinksList" style="display:flex;flex-direction:column;gap:8px"></div>
+          </div>
+
+          <div id="suggestionsBox" style="display:none" class="settings-card">
+            <h3 style="font-size:15px;font-weight:600;margin:0 0 12px;display:flex;align-items:center;gap:6px"><span class="material-symbols-outlined icon-fill" style="font-size:18px;color:#004ac6">auto_awesome</span> Sugestão IA</h3>
+            <div id="suggestionContent"></div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <div class="safe-bottom-pad"></div>
+  </main>
+</div>
+
+<div id="modalEdit" class="modal-backdrop" style="display:none">
+  <div class="modal-box">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:16px;font-weight:700;margin:0">Editar Informações</h3><button onclick="closeModal('modalEdit')" class="btn-secondary" style="border:none;padding:4px"><span class="material-symbols-outlined">close</span></button></div>
+    <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">
+      <div class="filter-select"><label>Nome final</label><input id="editName" type="text" class="form-control"></div>
+      <div class="filter-select"><label>Autor</label><input id="editAuthor" type="text" class="form-control"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="filter-select"><label>Ano</label><input id="editYear" type="number" min="1900" max="2099" class="form-control"></div>
+        <div class="filter-select"><label>Visibilidade</label><select id="editVisibility" class="form-control"><option value="private">Privado</option><option value="public">Público</option></select></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:4px"><button onclick="closeModal('modalEdit')" class="btn-secondary" style="flex:1;padding:11px;border-radius:10px">Cancelar</button><button onclick="saveEdits()" id="saveEditBtn" class="btn-primary" style="flex:1;padding:11px;border-radius:10px">Salvar</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="modalTags" class="modal-backdrop" style="display:none"><div class="modal-box"><div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:16px;font-weight:700;margin:0">Editar Tags</h3><button onclick="closeModal('modalTags')" class="btn-secondary" style="border:none;padding:4px"><span class="material-symbols-outlined">close</span></button></div><div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px"><div class="filter-select"><label>Tags separadas por vírgula</label><input id="tagsInput" type="text" class="form-control" placeholder="Ex: marxismo, leitura, 2024"></div><div style="display:flex;gap:10px"><button onclick="closeModal('modalTags')" class="btn-secondary" style="flex:1;padding:11px;border-radius:10px">Cancelar</button><button onclick="saveTags()" id="saveTagsBtn" class="btn-primary" style="flex:1;padding:11px;border-radius:10px">Salvar Tags</button></div></div></div></div>
+
+<div id="modalPaths" class="modal-backdrop" style="display:none"><div class="modal-box"><div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:16px;font-weight:700;margin:0">Vincular a trilhas</h3><button onclick="closeModal('modalPaths')" class="btn-secondary" style="border:none;padding:4px"><span class="material-symbols-outlined">close</span></button></div><div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px"><p style="font-size:13px;color:var(--text-muted);margin:0">O arquivo físico continua salvo uma única vez no Drive. A trilha só aponta para este material.</p><div id="pathsEditorList" style="display:flex;flex-direction:column;gap:10px;max-height:420px;overflow:auto"></div><div style="display:flex;gap:10px"><button onclick="closeModal('modalPaths')" class="btn-secondary" style="flex:1;padding:11px;border-radius:10px">Cancelar</button><button onclick="savePathLinks()" id="savePathsBtn" class="btn-primary" style="flex:1;padding:11px;border-radius:10px">Salvar vínculos</button></div></div></div></div>
+
+<?!= include('partials/bottomnav'); ?>
+<?!= include('scripts/app'); ?>
+
+<script>
+var FILE_ID = ((window.REPOSITORY_CONFIG && window.REPOSITORY_CONFIG.params && window.REPOSITORY_CONFIG.params.id) || (new URLSearchParams(window.location.search)).get('id'));
+var fileData = null;
+var pathLinks = [];
+
+onDomReady(function() {
+  if (window.innerWidth >= 768) document.getElementById('detailGrid').style.gridTemplateColumns = 'minmax(0,1fr) 340px';
+  if (!FILE_ID) { showDetailError('Material não informado', 'carregar detalhe', 'sem ID', 'A rota detalhe foi aberta sem parâmetro id.', ''); return; }
+  loadDetail(false);
+});
+
+function token(){ return sessionStorage.getItem('RE_ACCESS_TOKEN') || ''; }
+function loadDetail(force) {
+  console.time && console.time('detalhe:getFileDetail');
+  if (force) document.getElementById('skeleton').style.display = 'block';
+  google.script.run.withSuccessHandler(function(data){
+    console.timeEnd && console.timeEnd('detalhe:getFileDetail');
+    if (!data || !data.ok) { showDetailError('Falha ao carregar material', 'getFileDetail', FILE_ID, (data && data.error) || 'Arquivo não encontrado.', data && data.stack); return; }
+    renderDetail(data);
+  }).withFailureHandler(function(e){
+    console.timeEnd && console.timeEnd('detalhe:getFileDetail');
+    showDetailError('Erro no servidor', 'getFileDetail', FILE_ID, (e && e.message) || String(e), e && e.stack);
+  }).getFileDetail(FILE_ID, token());
+}
+
+function showDetailError(title, action, material, message, stack) {
+  document.getElementById('skeleton').style.display = 'none';
+  document.getElementById('detailContent').style.display = 'none';
+  var el = document.getElementById('detailError'); el.style.display = 'block';
+  el.innerHTML = '<div class="settings-card" style="border-color:#ffb4ab;background:#fff7f6">' +
+    '<div class="badge badge-rejected" style="margin-bottom:10px">ERRO VISÍVEL</div>' +
+    '<h2 style="color:#ba1a1a;font-size:22px;margin:0 0 8px">' + escHtml(title) + '</h2>' +
+    '<p><b>Ação:</b> ' + escHtml(action || '-') + '</p><p><b>Material:</b> ' + escHtml(material || '-') + '</p><p><b>Mensagem:</b> ' + escHtml(message || '-') + '</p>' +
+    '<pre style="white-space:pre-wrap;background:#111;color:#fff;padding:14px;border-radius:12px;overflow:auto;max-height:260px">' + escHtml(stack || message || '') + '</pre>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px"><button class="btn-secondary" onclick="navigate(\'biblioteca\')">Voltar para biblioteca</button><button class="btn-primary" onclick="navigate(\'dashboard\')">Ir para dashboard</button><button class="btn-danger" onclick="loadDetail(true)">Tentar novamente</button></div></div>';
+}
+
+function renderDetail(data) {
+  fileData = data; pathLinks = data.pathLinks || [];
+  var f = data.file;
+  document.getElementById('detailError').style.display = 'none';
+  document.getElementById('skeleton').style.display = 'none';
+  document.getElementById('detailContent').style.display = 'block';
+  var name = f.final_name || f.suggested_name || f.original_name;
+  document.getElementById('fileTitle').textContent = name;
+  document.getElementById('fileOriginalName').textContent = 'Nome original: ' + (f.original_name || '—');
+  document.getElementById('fileBadges').innerHTML = fileTypeBadge(f.file_type) + statusBadge(f.status) + (f.visibility==='public' ? '<span class="badge badge-approved">Público</span>' : '<span class="badge badge-archived">Privado</span>');
+  renderMaterialPrimaryView(f);
+  renderTags(data.tags || []); renderMeta(f); renderProgress(data.progress); renderReviewActions(data); renderHistory(data.history || []); renderPathLinks(pathLinks); renderSuggestion(data.suggestions || []);
+  document.getElementById('editName').value = f.final_name || f.suggested_name || '';
+  document.getElementById('editAuthor').value = f.author || '';
+  document.getElementById('editYear').value = f.year || '';
+  document.getElementById('editVisibility').value = f.visibility || 'private';
+}
+function renderTags(tags){ var el=document.getElementById('tagsList'); el.innerHTML = tags.length ? tags.map(function(t){return '<span class="chip" style="background:#dbe1ff;color:#003ea8">'+escHtml(t.name)+'</span>';}).join('') : '<span style="font-size:13px;color:var(--text-muted);font-style:italic">Nenhuma tag</span>'; }
+function renderMeta(f){ var items=[['Tipo',fileTypeBadge(f.file_type)],['Origem',escHtml(f.source_type||'drive_file')],['Status',statusBadge(f.status)],['Área',(f.categories&&f.categories.name)?escHtml(f.categories.name):'—'],['Assunto',(f.subjects&&f.subjects.name)?escHtml(f.subjects.name):'—'],['Autor/Canal',f.channel_title?escHtml(f.channel_title):(f.author?escHtml(f.author):'—')],['Ano',f.year||'—'],['Tamanho',f.source_type&&f.source_type!=='drive_file'?'Link externo':fmtSize(f.file_size)],['Adicionado em',fmtDate(f.created_at)]]; document.getElementById('metaList').innerHTML=items.map(function(it){return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f2f4f6;gap:12px"><span style="font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">'+it[0]+'</span><span style="font-size:13px;font-weight:500;color:var(--text-primary);text-align:right;word-break:break-word">'+it[1]+'</span></div>';}).join(''); }
+function renderProgress(prog){ var statuses=[['not_started','Não iniciado','remove_circle'],['reading','Lendo','menu_book'],['watching','Assistindo','smart_display'],['completed','Concluído','check_circle'],['review_later','Revisar depois','bookmark']]; var current=prog?prog.status:'not_started'; document.getElementById('progressBtns').innerHTML=statuses.map(function(s){var active=current===s[0];return '<button onclick="setProgress(\''+s[0]+'\')" class="active-scale" style="border:'+(active?'2px solid #004ac6':'1px solid #c3c6d7')+';border-radius:10px;padding:10px 8px;background:'+(active?'#dbe1ff':'#fff')+';cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px"><span class="material-symbols-outlined" style="font-size:22px;color:'+(active?'#004ac6':'#737686')+'">'+s[2]+'</span><span style="font-size:11px;font-weight:600;color:#434655">'+s[1]+'</span></button>';}).join(''); }
+function renderHistory(history){ var el=document.getElementById('historyList'); if(!history.length){el.innerHTML='<p style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px 0">Sem alterações registradas.</p>';return;} el.innerHTML=history.slice(0,10).map(function(h){return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #f2f4f6"><span class="material-symbols-outlined" style="color:#004ac6">history</span><div><div style="font-size:13px;font-weight:600;color:#191c1e">'+escHtml(h.action)+'</div><div style="font-size:11px;color:#737686">'+fmtDate(h.created_at)+(h.profiles?' · '+escHtml(h.profiles.display_name):'')+'</div></div></div>';}).join(''); }
+function renderPathLinks(paths){ var linked=(paths||[]).filter(function(p){return p.linked;}); var el=document.getElementById('pathLinksList'); if(!linked.length){el.innerHTML='<p style="font-size:13px;color:var(--text-muted);margin:0">Este material ainda não está vinculado a nenhuma trilha.</p>';return;} el.innerHTML=linked.map(function(p){var type=p.item_type==='complementary'?'Complementar':p.item_type==='optional'?'Opcional':'Obrigatório'; return '<div style="border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--surface);display:flex;gap:8px;align-items:center"><span class="material-symbols-outlined" style="color:#004ac6">route</span><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(p.title)+'</div><div style="font-size:11px;color:#737686">'+type+' · posição '+(p.position||'—')+'</div></div><button class="btn-secondary" style="padding:6px 8px;border-radius:8px" onclick="navigate(\'trilha-detalhe\',{pathId:\''+p.id+'\'})">Abrir</button></div>';}).join(''); }
+function renderSuggestion(suggestions){ var pending=(suggestions||[]).filter(function(s){return s.status==='pending';})[0]; var box=document.getElementById('suggestionsBox'); if(!pending){box.style.display='none';return;} box.style.display='block'; document.getElementById('suggestionContent').innerHTML='<div style="font-size:14px;font-weight:600;color:var(--primary);margin-bottom:6px">'+escHtml(pending.suggested_name)+'</div><div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">'+escHtml(pending.reason||'')+'</div><div style="display:flex;gap:8px"><button class="btn-primary" onclick="approveSug(\''+pending.id+'\')" style="flex:1;border-radius:100px;padding:7px;font-size:12px">Aprovar</button><button class="btn-danger" onclick="rejectSug(\''+pending.id+'\')" style="border-radius:100px;padding:7px 14px;font-size:12px">Rejeitar</button></div>'; }
+
+function renderMaterialPrimaryView(f){
+  ['btnDriveOpen','btnDownload','btnExternalOpen','btnReaderOpen'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
+  document.getElementById('previewBox').style.display='none';
+  document.getElementById('externalPlayerBox').style.display='none';
+  document.getElementById('noPreview').style.display='none';
+  var canRead = ['document','book','article','notes','slide','summary'].indexOf(String(f.file_type||'').toLowerCase())>=0 || !!f.google_drive_preview_url;
+  if(canRead && f.google_drive_preview_url){ var br=document.getElementById('btnReaderOpen'); if(br) br.style.display='inline-flex'; }
+  if(f.google_drive_web_url){ var a=document.getElementById('btnDriveOpen'); a.href=f.google_drive_web_url; a.style.display='inline-flex'; document.getElementById('noPreviewLink').href=f.google_drive_web_url; }
+  if(f.google_drive_download_url){ var d=document.getElementById('btnDownload'); d.href=f.google_drive_download_url; d.style.display='inline-flex'; }
+  if(f.external_url){ var ex=document.getElementById('btnExternalOpen'); ex.href=f.external_url; ex.style.display='inline-flex'; }
+  if(isExternalMaterial(f)){ renderExternalMaterial(f); return; }
+  if(f.google_drive_preview_url){ document.getElementById('previewIframe').src=f.google_drive_preview_url; document.getElementById('previewBox').style.display='block'; document.getElementById('noPreview').style.display='none'; }
+  else { document.getElementById('noPreview').style.display='block'; }
+}
+function renderExternalMaterial(f){
+  var box=document.getElementById('externalPlayerBox'); box.style.display='block';
+  document.getElementById('externalTitle').textContent=f.final_name||f.suggested_name||f.original_name||'Material externo';
+  document.getElementById('externalMeta').textContent=(f.channel_title?f.channel_title+' · ':'')+(f.external_url||'');
+  document.getElementById('externalBadges').innerHTML=fileTypeBadge(f.file_type)+'<span class="badge badge-secondary">'+escHtml(f.external_provider||'external')+'</span>';
+  var thumb=document.getElementById('externalThumb'); if(f.thumbnail_url){thumb.src=f.thumbnail_url;thumb.style.display='block';} else {thumb.style.display='none';}
+  var fb=document.getElementById('externalFallbackLink'); fb.href=f.external_url||'#';
+  var embed=document.getElementById('externalEmbedArea'); embed.innerHTML='';
+  if(isYouTubeMaterial(f) && f.embed_url){
+    embed.innerHTML='<div class="youtube-frame-wrap"><iframe src="'+escHtml(f.embed_url)+'" title="YouTube player" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>';
+    saveVideoState('watching');
+  } else {
+    embed.innerHTML='<div style="padding:24px;text-align:center;background:#f2f4f6"><span class="material-symbols-outlined" style="font-size:44px;color:#737686">link</span><p style="margin:8px 0 0;color:var(--text-muted);font-size:13px">Este link não tem embed seguro. Use o botão Abrir fora.</p></div>';
+  }
+}
+function openReaderFromDetail(){ navigate('leitor',{id:FILE_ID}); }
+function markWatching(){ setProgress('watching'); saveVideoState('watching'); }
+function saveVideoState(status){ if(!FILE_ID) return; google.script.run.withSuccessHandler(function(){}).withFailureHandler(function(){}).saveVideoProgress({accessToken:token(),materialId:FILE_ID,status:status||'watching'}, token()); }
+
+function setProgress(status){ google.script.run.withSuccessHandler(function(res){ if(res&&res.ok){showToast('Progresso atualizado!','success');renderProgress({status:status});} else showToast((res&&res.error)||'Erro ao atualizar progresso.','error'); }).withFailureHandler(function(e){showToast((e&&e.message)||String(e),'error');}).updateProgress(FILE_ID,status,'',token()); }
+function renderReviewActions(data) {
+  var box = document.getElementById('reviewActionsBox');
+  if (!box || !data || !data.file) return;
+  var f = data.file;
+  box.style.display = 'block';
+  var html = '<h3 style="font-size:15px;font-weight:600;margin:0 0 12px;display:flex;align-items:center;gap:6px"><span class="material-symbols-outlined" style="font-size:18px;color:#004ac6">reviews</span> Resenhas e debate</h3>' +
+    '<p style="font-size:13px;color:var(--text-muted);margin:0 0 12px">Veja comentários públicos sobre este material ou publique uma resenha crítica.</p>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">' +
+      '<button class="btn-primary" onclick="navigate(\'resenhas\',{materialId:FILE_ID})" style="flex:1;border-radius:100px;padding:8px 12px;font-size:12px"><span class="material-symbols-outlined" style="font-size:16px">forum</span> Ver resenhas</button>' +
+      '<button class="btn-secondary" onclick="navigate(\'resenhas\',{materialId:FILE_ID,compose:\'review\'})" style="flex:1;border-radius:100px;padding:8px 12px;font-size:12px"><span class="material-symbols-outlined" style="font-size:16px">edit</span> Escrever</button>' +
+    '</div>';
+  if (data.canApprove && ['pending','rejected'].indexOf(f.status) !== -1) {
+    html += '<div style="border-top:1px solid var(--border);padding-top:12px">' +
+      '<h3 style="font-size:15px;font-weight:600;margin:0 0 12px;display:flex;align-items:center;gap:6px"><span class="material-symbols-outlined" style="font-size:18px;color:#004ac6">verified</span> Aprovação do material</h3>' +
+      '<p style="font-size:13px;color:var(--text-muted);margin:0 0 12px">Status atual: ' + statusBadge(f.status) + '</p>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="btn-primary review-action-btn" onclick="approveCurrentMaterial()"><span class="material-symbols-outlined" style="font-size:16px">check</span> Aprovar</button>' +
+        '<button class="btn-danger review-action-btn" onclick="rejectCurrentMaterial()"><span class="material-symbols-outlined" style="font-size:16px">close</span> Reprovar</button>' +
+      '</div></div>';
+  }
+  box.innerHTML = html;
+}
+function approveCurrentMaterial(){
+  if(!FILE_ID) return showDetailError('Material não informado','approveMaterial','sem ID','Não foi possível identificar o material.','');
+  google.script.run.withSuccessHandler(function(res){
+    if(res&&res.ok){ showToast('Material aprovado.','success'); clearPageCache(); if(fileData&&fileData.file){ fileData.file.status='approved'; renderReviewActions(fileData); renderMeta(fileData.file); document.getElementById('fileBadges').innerHTML = fileTypeBadge(fileData.file.file_type) + statusBadge(fileData.file.status) + (fileData.file.visibility==='public' ? '<span class="badge badge-approved">Público</span>' : '<span class="badge badge-archived">Privado</span>'); } loadDetail(false); }
+    else showDetailError('Erro ao aprovar material','approveMaterial',FILE_ID,(res&&res.error)||'Erro desconhecido.',res&&res.stack);
+  }).withFailureHandler(function(e){ showDetailError('Erro ao aprovar material','approveMaterial',FILE_ID,(e&&e.message)||String(e),e&&e.stack); }).approveMaterial(FILE_ID, token());
+}
+function rejectCurrentMaterial(){
+  if(!FILE_ID) return showDetailError('Material não informado','rejectMaterial','sem ID','Não foi possível identificar o material.','');
+  var reason = prompt('Motivo da reprovação (opcional):') || '';
+  google.script.run.withSuccessHandler(function(res){
+    if(res&&res.ok){ showToast('Material reprovado.','default'); clearPageCache(); if(fileData&&fileData.file){ fileData.file.status='rejected'; renderReviewActions(fileData); renderMeta(fileData.file); document.getElementById('fileBadges').innerHTML = fileTypeBadge(fileData.file.file_type) + statusBadge(fileData.file.status) + (fileData.file.visibility==='public' ? '<span class="badge badge-approved">Público</span>' : '<span class="badge badge-archived">Privado</span>'); } loadDetail(false); }
+    else showDetailError('Erro ao reprovar material','rejectMaterial',FILE_ID,(res&&res.error)||'Erro desconhecido.',res&&res.stack);
+  }).withFailureHandler(function(e){ showDetailError('Erro ao reprovar material','rejectMaterial',FILE_ID,(e&&e.message)||String(e),e&&e.stack); }).rejectMaterial(FILE_ID, reason, token());
+}
+function openEditModal(){ openModal('modalEdit'); }
+function saveEdits(){
+  if(!FILE_ID){ showDetailError('Material não informado','updateFile','sem ID','A edição foi aberta sem parâmetro id.',''); return; }
+  var btn=document.getElementById('saveEditBtn');
+  setBtnLoading(btn,true,'Salvando…');
+  var payload = {
+    accessToken:token(),
+    final_name:document.getElementById('editName').value.trim(),
+    author:document.getElementById('editAuthor').value.trim(),
+    year:parseInt(document.getElementById('editYear').value,10)||null,
+    visibility:document.getElementById('editVisibility').value
+  };
+  google.script.run.withSuccessHandler(function(res){
+    setBtnLoading(btn,false);
+    if(res&&res.ok){
+      showToast('Informações salvas.','success');
+      closeModal('modalEdit');
+      clearPageCache();
+      if(fileData && fileData.file){
+        Object.keys(payload).forEach(function(k){ if(k !== 'accessToken') fileData.file[k] = payload[k]; });
+        document.getElementById('fileTitle').textContent = fileData.file.final_name || fileData.file.suggested_name || fileData.file.original_name || 'Material';
+        document.getElementById('fileBadges').innerHTML = fileTypeBadge(fileData.file.file_type) + statusBadge(fileData.file.status) + (fileData.file.visibility==='public' ? '<span class="badge badge-approved">Público</span>' : '<span class="badge badge-archived">Privado</span>');
+        renderMeta(fileData.file);
+      }
+      setTimeout(function(){ loadDetail(false); }, 250);
+    } else {
+      showDetailError('Erro ao salvar material','updateFile',FILE_ID,(res&&res.error)||'Erro desconhecido.',res&&res.stack);
+    }
+  }).withFailureHandler(function(e){
+    setBtnLoading(btn,false);
+    showDetailError('Erro ao salvar material','updateFile',FILE_ID,(e&&e.message)||String(e),e&&e.stack);
+  }).updateFile(FILE_ID,payload);
+}
+function openTagEditor(){ var cur=(fileData&&fileData.tags)?fileData.tags.map(function(t){return t.name;}).join(', '):''; document.getElementById('tagsInput').value=cur; openModal('modalTags'); }
+function saveTags(){ var tags=document.getElementById('tagsInput').value.split(',').map(function(t){return t.trim();}).filter(Boolean); var btn=document.getElementById('saveTagsBtn'); setBtnLoading(btn,true,'Salvando…'); google.script.run.withSuccessHandler(function(res){ setBtnLoading(btn,false); if(res&&res.ok){showToast('Tags salvas!','success');closeModal('modalTags');renderTags(tags.map(function(n){return{name:n};}));} else showToast((res&&res.error)||'Erro ao salvar tags.','error'); }).withFailureHandler(function(e){setBtnLoading(btn,false);showToast((e&&e.message)||String(e),'error');}).setFileTags(FILE_ID,tags,token()); }
+function openPathModal(){ renderPathsEditor(); openModal('modalPaths'); }
+function renderPathsEditor(){ var el=document.getElementById('pathsEditorList'); if(!pathLinks.length){el.innerHTML='<p style="font-size:13px;color:#737686">Nenhuma trilha disponível.</p>'; return;} el.innerHTML=pathLinks.map(function(p,i){return '<div class="path-link-row" data-path-id="'+p.id+'" style="border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--input-bg)"><label style="display:flex;gap:8px;align-items:center;font-weight:700;font-size:14px"><input type="checkbox" '+(p.linked?'checked':'')+' style="accent-color:#004ac6">'+escHtml(p.title)+'</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><select class="path-item-type form-control"><option value="required" '+(p.item_type==='required'?'selected':'')+'>Obrigatório</option><option value="complementary" '+(p.item_type==='complementary'?'selected':'')+'>Complementar</option><option value="optional" '+(p.item_type==='optional'?'selected':'')+'>Opcional</option></select><label style="font-size:12px;display:flex;align-items:center;gap:6px"><input class="path-required" type="checkbox" '+(p.is_required!==false?'checked':'')+'> Conta no progresso</label></div></div>';}).join(''); }
+function savePathLinks(){ var rows=[].slice.call(document.querySelectorAll('.path-link-row')); var links=rows.map(function(r){return{pathId:r.getAttribute('data-path-id'),linked:r.querySelector('input[type="checkbox"]').checked,itemType:r.querySelector('.path-item-type').value,isRequired:r.querySelector('.path-required').checked};}); var btn=document.getElementById('savePathsBtn'); setBtnLoading(btn,true,'Salvando…'); google.script.run.withSuccessHandler(function(res){ setBtnLoading(btn,false); if(res&&res.ok){showToast('Vínculos salvos.','success');closeModal('modalPaths');clearPageCache();loadDetail(true);} else showToast((res&&res.error)||'Erro ao vincular trilhas.','error',8000); }).withFailureHandler(function(e){setBtnLoading(btn,false);showToast((e&&e.message)||String(e),'error',8000);}).updateMaterialPathLinks(FILE_ID,links,token()); }
+function approveSug(id){ google.script.run.withSuccessHandler(function(res){ if(res&&res.ok){showToast('Aprovado!','success');loadDetail(true);} else showToast((res&&res.error)||'Erro.','error'); }).withFailureHandler(function(e){showToast((e&&e.message)||String(e),'error');}).approveSuggestion(id,token()); }
+function rejectSug(id){ google.script.run.withSuccessHandler(function(res){ if(res&&res.ok){showToast('Rejeitado.','default');loadDetail(true);} else showToast((res&&res.error)||'Erro.','error'); }).withFailureHandler(function(e){showToast((e&&e.message)||String(e),'error');}).rejectSuggestion(id,token()); }
+</script>
+</body>
+</html>

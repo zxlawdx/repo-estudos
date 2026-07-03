@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Repositório de Estudos</title>
+  <style>
+    body {
+      margin: 0;
+      background:var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100dvh;
+      font-family: 'Inter', sans-serif;
+    }
+    .loader {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    .logo-box {
+      width: 64px;
+      height: 64px;
+      background: #004ac6;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 24px rgba(0,74,198,.3);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .logo-box svg { width: 32px; height: 32px; fill: white; }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 8px 24px rgba(0,74,198,.3); }
+      50%       { transform: scale(1.05); box-shadow: 0 12px 32px rgba(0,74,198,.45); }
+    }
+    p { font-size: 14px; color:var(--text-muted); margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="loader">
+    <div class="logo-box">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M19 2H6c-1.206 0-3 .799-3 3v14c0 2.201 1.794 3 3 3h15v-2H6.012C5.55 19.988 5 19.806 5 19s.55-.988 1.012-1H21V4c0-1.103-.897-2-2-2zm0 14H5V5c0-.806.55-.988 1-1h13v12z"/>
+        <path d="M9 7h6v2H9zm0 4h6v2H9z"/>
+      </svg>
+    </div>
+    <p>Carregando Repositório de Estudos…</p>
+  </div>
+
+  <script>
+
+    function goPageIndex_(page) {
+      var appUrl = <?!= JSON.stringify((config && config.appUrl) || '') ?>;
+      if (appUrl) window.open(appUrl.replace(/\/+$/, '') + '?page=' + page, '_top');
+      else window.open('?page=' + page, '_top');
+    }
+
+    // Verifica sessão e redireciona
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.logged_in) {
+          goPageIndex_('dashboard');
+        } else {
+          goPageIndex_('login');
+        }
+      })
+      .withFailureHandler(function() {
+        goPageIndex_('login');
+      })
+      .healthCheck();
+  </script>
+</body>
+</html>
