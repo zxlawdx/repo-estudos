@@ -2,45 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 
-html, body {
-  height: 100%;
-  margin: 0;
-  background-color: #f7f9fb;
-  font-family: 'Inter', sans-serif;
-}
-
-.material-symbols-outlined {
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-  vertical-align: middle;
-  line-height: 1;
-}
-
-.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+:root { color-scheme: light; }
+html, body { min-height: 100%; margin: 0; background-color: #f7f9fb; font-family: 'Inter', sans-serif; color: #191c1e; }
+a { color: inherit; }
+.material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 450, 'GRAD' 0, 'opsz' 24; vertical-align: middle; line-height: 1; }
+.material-symbols-outlined.icon-fill { font-variation-settings: 'FILL' 1, 'wght' 600, 'GRAD' 0, 'opsz' 24; }
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #e0e3e5; border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #c3c6d7; border-radius: 999px; }
+.safe-area-bottom { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
 
-.bento-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1.5rem;
+@layer components {
+  .page-shell { @apply p-md md:p-2xl max-w-container-max mx-auto w-full; }
+  .settings-card { @apply bg-white border border-outline-variant rounded-3xl p-lg shadow-sm; }
+  .section-title { @apply text-headline-sm font-bold text-on-surface; }
+  .btn-primary { @apply inline-flex items-center justify-center gap-2 bg-primary text-white rounded-2xl px-md py-2 text-label-md font-semibold hover:opacity-90 active:scale-[0.98] transition disabled:opacity-60; }
+  .btn-secondary { @apply inline-flex items-center justify-center gap-2 bg-surface-container-lowest border border-outline-variant text-on-surface-variant rounded-2xl px-md py-2 text-label-md font-semibold hover:bg-surface-container-low active:scale-[0.98] transition disabled:opacity-50; }
+  .btn-danger { @apply inline-flex items-center justify-center gap-2 bg-error text-white rounded-2xl px-md py-2 text-label-md font-semibold hover:opacity-90 active:scale-[0.98] transition disabled:opacity-50; }
+  .form-control { @apply w-full px-4 py-3 bg-white border border-outline-variant rounded-2xl focus:ring-2 focus:ring-primary focus:border-primary outline-none text-body-sm; }
+  .filter-select { @apply flex flex-col gap-1 text-label-sm text-on-surface-variant; }
+  .chips-row { @apply flex gap-2 overflow-x-auto pb-1 custom-scrollbar; }
+  .filter-chip { @apply inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-outline-variant bg-white px-4 py-2 text-label-md text-on-surface-variant hover:bg-surface-container-low transition; }
+  .filter-chip.active { @apply bg-primary text-white border-primary; }
+  .badge { @apply inline-flex items-center rounded-full px-3 py-1 text-label-sm font-semibold bg-surface-container-high text-on-surface-variant; }
+  .badge-secondary { @apply bg-secondary-container text-on-secondary-container; }
+  .badge-approved { @apply bg-green-100 text-green-800; }
+  .badge-pending { @apply bg-amber-100 text-amber-800; }
+  .bento-grid { @apply grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-lg; }
+  .file-card { @apply bg-white border border-outline-variant rounded-3xl p-lg shadow-sm hover:shadow-md hover:-translate-y-0.5 transition cursor-pointer; }
+  .file-card-title { @apply text-headline-sm text-on-surface font-bold line-clamp-2; }
+  .file-card-subtitle { @apply text-body-sm text-on-surface-variant mt-1 line-clamp-2; }
+  .file-card-meta { @apply grid grid-cols-2 gap-3 mt-md text-label-sm text-on-surface-variant; }
+  .file-card-meta label { @apply block uppercase tracking-wide text-[10px] text-outline; }
+  .file-card-meta span { @apply block text-on-surface truncate; }
+  .path-card { @apply bg-white border border-outline-variant rounded-3xl p-lg shadow-sm hover:shadow-md hover:-translate-y-0.5 transition; }
+  .stat-card { @apply bg-white border border-outline-variant rounded-3xl p-lg shadow-sm; }
+  .stat-card.compact { @apply p-md; }
+  .stat-label { @apply text-label-sm text-on-surface-variant uppercase tracking-wider; }
+  .stat-value { @apply text-headline-md text-on-surface font-extrabold; }
+  .quick-action { @apply flex flex-col items-center justify-center gap-2 rounded-3xl border border-outline-variant bg-white p-md text-label-md text-on-surface-variant hover:bg-secondary-container hover:text-primary transition no-underline; }
+  .activity-row { @apply flex items-start gap-3 py-3; }
+  .activity-row b { @apply block text-body-sm text-on-surface; }
+  .activity-row small { @apply block text-label-sm text-on-surface-variant; }
+  .safe-status-panel { @apply rounded-3xl border border-outline-variant overflow-hidden bg-surface-container-lowest; }
+  .safe-status-row { @apply flex items-center justify-between gap-3 px-md py-3 border-b border-outline-variant last:border-0 text-body-sm; }
+  .safe-status-row span { @apply text-on-surface-variant; }
+  .safe-status-row b { @apply text-on-surface text-right; }
+  .empty-state { @apply flex flex-col items-center justify-center py-2xl text-center text-on-surface-variant; }
+  .empty-state .material-symbols-outlined { @apply text-6xl text-outline-variant mb-md; }
+  .empty-state h3 { @apply text-headline-sm text-on-surface; }
+  .empty-state p { @apply text-body-md text-on-surface-variant max-w-sm mt-1; }
+  .upload-drop { @apply min-h-[360px] border-2 border-dashed border-outline-variant rounded-3xl bg-surface-container-lowest flex flex-col items-center justify-center text-center p-xl transition; }
+  .link-preview-panel { @apply rounded-3xl border border-outline-variant bg-surface-container-low p-lg; }
+  .preview-frame { @apply w-full min-h-[520px] rounded-3xl overflow-hidden border border-outline-variant bg-surface-container-low; }
+  .preview-frame iframe { @apply w-full h-full min-h-[520px] border-0; }
+  .graph-canvas { @apply relative w-full h-[620px] rounded-3xl border border-outline-variant bg-surface-container-low overflow-hidden; }
+  .graph-node-circle { fill: white; stroke: #004ac6; stroke-width: 2.5; filter: drop-shadow(0 6px 14px rgba(15,23,42,.12)); }
+  .graph-node-icon { font-size: 20px; pointer-events: none; }
+  .graph-node-label { font-size: 12px; fill: #191c1e; font-weight: 700; pointer-events: none; }
+  .graph-empty { @apply absolute inset-0 flex flex-col items-center justify-center text-center text-on-surface-variant; }
 }
 
-.folder-transition {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.folder-transition:hover {
-  transform: translateY(-4px);
-}
-
-.glass-header {
-  background: rgba(247, 249, 251, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-.safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom);
+@media (max-width: 767px) {
+  .page-shell { padding: 16px; }
+  .settings-card, .file-card, .path-card, .stat-card { border-radius: 22px; padding: 16px; }
+  .preview-frame, .preview-frame iframe { min-height: 62vh; }
 }

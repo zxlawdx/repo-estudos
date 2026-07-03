@@ -1,71 +1,99 @@
-import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
-import { ApiService } from '../../core/api.service';
-import { LoadingComponent } from '../../shared/components/loading/loading.component';
-import { ErrorMessageComponent } from '../../shared/components/error-message/error-message.component';
+import { Component, OnInit, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { FilesService } from '../../core/services/files.service';
+import { StudyMaterial } from '../../core/models/app.models';
 import { EmptyStateComponent } from '../../shared/components/empty-state/empty-state.component';
+import { ErrorMessageComponent } from '../../shared/components/error-message/error-message.component';
+import { LoadingComponent } from '../../shared/components/loading/loading.component';
+import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
+import { firstArray, fileTitle, fileTypeLabel, pickString, statusLabel } from '../../shared/utils/view.utils';
 
 @Component({
   selector: 'app-library-page',
   standalone: true,
-  imports: [CommonModule, RouterLink, LoadingComponent, ErrorMessageComponent, EmptyStateComponent],
+  imports: [CommonModule, FormsModule, RouterLink, PageHeaderComponent, LoadingComponent, ErrorMessageComponent, EmptyStateComponent],
   template: `
-    <section class="p-lg md:p-2xl max-w-container-max mx-auto w-full">
-      <div class="flex flex-col md:flex-row md:items-end justify-between gap-md mb-xl">
-        <div>
-          <h2 class="text-headline-md text-on-surface">Minha Biblioteca</h2>
-          <p class="text-body-md text-on-surface-variant">Todos os materiais de estudo disponíveis.</p>
-        </div>
-        <a routerLink="/app/upload" class="flex items-center gap-2 bg-primary text-on-primary px-lg py-2 rounded-xl text-label-md hover:opacity-90 transition-opacity">
-          <span class="material-symbols-outlined text-[20px]">add</span>
-          Novo material
-        </a>
+    <section class="page-shell">
+      <div class="flex items-end justify-between gap-3 flex-wrap mb-lg">
+        <app-page-header title="Biblioteca" subtitle="Materiais acadêmicos, links, vídeos, livros, provas e resumos."></app-page-header>
+        <div class="flex gap-2"><a routerLink="/app/link" class="btn-secondary no-underline"><span class="material-symbols-outlined text-[18px]">add_link</span> Link</a><a routerLink="/app/upload" class="btn-primary no-underline"><span class="material-symbols-outlined text-[18px]">add</span> Upload</a></div>
       </div>
+
+      <div class="chips-row mb-md">
+        <button *ngFor="let chip of chips" type="button" (click)="typeFilter = chip.value; load()" [class.active]="typeFilter === chip.value" class="filter-chip"><span class="material-symbols-outlined text-[16px]" *ngIf="chip.icon">{{ chip.icon }}</span>{{ chip.label }}</button>
+      </div>
+
+      <section class="settings-card mb-lg">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-md">
+          <label class="filter-select md:col-span-2"><span>Busca</span><input class="form-control" [(ngModel)]="search" (keyup.enter)="load()" placeholder="Título, autor, tag..." /></label>
+          <label class="filter-select"><span>Status</span><select class="form-control" [(ngModel)]="statusFilter" (change)="load()"><option value="">Todos</option><option value="approved">Aprovado</option><option value="pending">Pendente</option><option value="rejected">Rejeitado</option></select></label>
+          <label class="filter-select"><span>Visibilidade</span><select class="form-control" [(ngModel)]="visibility" (change)="load()"><option value="">Todas</option><option value="public">Público</option><option value="private">Privado</option></select></label>
+        </div>
+      </section>
 
       <app-loading *ngIf="loading()"></app-loading>
       <app-error-message *ngIf="error()" [message]="error()!"></app-error-message>
-      <app-empty-state *ngIf="!loading() && !error() && !files().length"
-                        icon="folder_open" title="Nenhum material encontrado"
-                        description="Faça upload de um novo material ou ajuste os filtros de busca."></app-empty-state>
+      <app-empty-state *ngIf="!loading() && !error() && !materials().length" icon="folder_open" title="Nenhum material encontrado" description="Ajuste os filtros ou cadastre um novo material."></app-empty-state>
 
-      <div class="bento-grid" *ngIf="!loading() && files().length">
-        <div *ngFor="let file of files()" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col h-full folder-transition">
-          <div class="flex justify-between items-start mb-md">
-            <span class="bg-secondary-container text-on-secondary-container text-[10px] font-bold px-2 py-0.5 rounded uppercase">{{ file.file_type || 'arquivo' }}</span>
-            <span class="px-2 py-0.5 text-[10px] font-bold rounded-full border"
-                  [class.bg-green-100]="file.status === 'approved'" [class.text-green-700]="file.status === 'approved'"
-                  [class.bg-amber-100]="file.status === 'pending'" [class.text-amber-700]="file.status === 'pending'">
-              {{ file.status || 'pendente' }}
-            </span>
+      <div class="bento-grid" *ngIf="!loading() && materials().length">
+        <article *ngFor="let material of materials()" class="file-card">
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex flex-wrap gap-2"><span class="badge badge-secondary">{{ typeLabel(material) }}</span><span class="badge" [class.badge-approved]="String(material.status).toLowerCase()==='approved'" [class.badge-pending]="String(material.status).toLowerCase()==='pending'">{{ status(material.status) }}</span></div>
+            <span class="material-symbols-outlined text-outline">description</span>
           </div>
-          <h3 class="text-headline-sm text-on-surface leading-tight mb-1">{{ file.final_name || file.suggested_name || file.original_name }}</h3>
-          <p class="text-body-sm text-outline italic mb-md">{{ file.original_name }}</p>
-          <div class="mt-auto flex gap-sm">
-            <a [routerLink]="['/app/library', file.id]" class="flex-1 bg-primary text-on-primary py-2 rounded-lg text-label-md text-center hover:opacity-90 transition-opacity">Abrir</a>
+          <h3 class="file-card-title mt-md">{{ title(material) }}</h3>
+          <p class="file-card-subtitle">{{ material.original_name || material.description || 'Sem descrição curta' }}</p>
+          <div class="file-card-meta">
+            <div><label>Autor</label><span>{{ material.author || '—' }}</span></div>
+            <div><label>Ano</label><span>{{ material.year || '—' }}</span></div>
+            <div><label>Categoria</label><span>{{ category(material) || '—' }}</span></div>
+            <div><label>Assunto</label><span>{{ material.subject_name || '—' }}</span></div>
           </div>
-        </div>
+          <div class="flex items-center gap-2 flex-wrap mt-md">
+            <a [routerLink]="['/app/library', idOf(material)]" class="btn-primary no-underline">Abrir</a>
+            <a *ngIf="previewUrl(material)" [href]="previewUrl(material)" target="_blank" rel="noopener" class="btn-secondary no-underline"><span class="material-symbols-outlined text-[18px]">open_in_new</span></a>
+            <a [routerLink]="['/app/reader', idOf(material)]" class="btn-secondary no-underline">Leitor</a>
+          </div>
+        </article>
       </div>
     </section>
   `
 })
 export class LibraryPageComponent implements OnInit {
+  String = String;
   loading = signal(true);
   error = signal<string | null>(null);
-  files = signal<any[]>([]);
+  materials = signal<StudyMaterial[]>([]);
+  search = '';
+  typeFilter = 'all';
+  statusFilter = '';
+  visibility = '';
+  chips = [
+    { value: 'all', label: 'Todos', icon: '' }, { value: 'book', label: 'Livros', icon: 'menu_book' }, { value: 'article', label: 'Artigos', icon: '' },
+    { value: 'slide', label: 'Slides', icon: '' }, { value: 'video', label: 'Vídeos', icon: 'smart_display' }, { value: 'playlist', label: 'Playlists', icon: 'video_library' },
+    { value: 'external_link', label: 'Links', icon: 'link' }, { value: 'pending', label: 'Pendentes', icon: 'pending' }
+  ];
 
-  constructor(private api: ApiService) {}
+  constructor(private files: FilesService, private route: ActivatedRoute) {}
+  ngOnInit(): void { this.search = this.route.snapshot.queryParamMap.get('q') || ''; this.load(); }
 
-  ngOnInit(): void {
-    this.api.get<any>('/files').subscribe({
-      next: (res) => {
-        this.files.set(Array.isArray(res) ? res : res?.files || []);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.error.set('Não foi possível carregar a biblioteca.');
-        this.loading.set(false);
-      }
+  load(): void {
+    this.loading.set(true); this.error.set(null);
+    const params: Record<string, unknown> = { q: this.search, search: this.search, status: this.statusFilter, visibility: this.visibility };
+    if (this.typeFilter && this.typeFilter !== 'all' && this.typeFilter !== 'pending') params['type'] = this.typeFilter;
+    if (this.typeFilter === 'pending') params['status'] = 'pending';
+    this.files.list(params).subscribe({
+      next: (res) => { this.materials.set(firstArray<StudyMaterial>(res, ['files', 'materials', 'items', 'content'])); this.loading.set(false); },
+      error: (err: Error) => { this.error.set(err.message); this.loading.set(false); }
     });
   }
+
+  idOf(material: StudyMaterial): string { return String(material.id || material.material_id || material.file_id || ''); }
+  title(material: StudyMaterial): string { return fileTitle(material); }
+  typeLabel(material: StudyMaterial): string { return fileTypeLabel(material.file_type || material.type); }
+  status(value: unknown): string { return statusLabel(value); }
+  category(material: StudyMaterial): string { return pickString(material, ['category_name']); }
+  previewUrl(material: StudyMaterial): string { return pickString(material, ['google_drive_preview_url', 'preview_url', 'google_drive_url', 'url']); }
 }

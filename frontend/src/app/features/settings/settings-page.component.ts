@@ -1,50 +1,11 @@
-import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Component, OnInit, signal } from '@angular/core';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
-
-@Component({
-  selector: 'app-settings-page',
-  standalone: true,
-  imports: [CommonModule],
-  template: `
-    <section class="p-lg md:p-2xl max-w-2xl mx-auto w-full">
-      <h2 class="text-headline-md text-on-surface mb-xl">Configurações</h2>
-
-      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg space-y-md">
-        <h3 class="text-headline-sm mb-md">Status do sistema</h3>
-        <div class="flex items-center justify-between">
-          <span class="text-body-sm text-on-surface-variant">Google Drive</span>
-          <span class="px-3 py-1 rounded-full text-label-sm"
-                [class.bg-green-100]="driveOk()" [class.text-green-700]="driveOk()"
-                [class.bg-error-container]="driveOk() === false" [class.text-error]="driveOk() === false">
-            {{ driveOk() === null ? 'Verificando...' : (driveOk() ? 'Conectado' : 'Indisponível') }}
-          </span>
-        </div>
-        <p class="text-body-sm text-on-surface-variant">Nenhuma chave sensível é exibida nesta tela.</p>
-      </div>
-
-      <div class="mt-xl">
-        <button (click)="logout()" class="border border-error text-error px-lg py-2 rounded-xl text-label-md hover:bg-error/5 transition-all">
-          Sair da conta
-        </button>
-      </div>
-    </section>
-  `
-})
-export class SettingsPageComponent implements OnInit {
-  driveOk = signal<boolean | null>(null);
-
-  constructor(private api: ApiService, private auth: AuthService) {}
-
-  ngOnInit(): void {
-    this.api.get<any>('/drive/health').subscribe({
-      next: (res) => this.driveOk.set(!!(res && res.ok !== false)),
-      error: () => this.driveOk.set(false)
-    });
-  }
-
-  logout() {
-    this.auth.logout();
-  }
-}
+import { ErrorMessageComponent } from '../../shared/components/error-message/error-message.component';
+import { LoadingComponent } from '../../shared/components/loading/loading.component';
+import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
+import { pickString } from '../../shared/utils/view.utils';
+@Component({selector:'app-settings-page',standalone:true,imports:[CommonModule,PageHeaderComponent,LoadingComponent,ErrorMessageComponent],template:`
+<section class="page-shell"><app-page-header title="Configurações" subtitle="Status seguro das integrações e preferências da conta."></app-page-header><app-loading *ngIf="loading()"></app-loading><app-error-message *ngIf="error()" [message]="error()!"></app-error-message><div class="grid grid-cols-1 lg:grid-cols-2 gap-lg" *ngIf="!loading()"><section class="settings-card"><h3 class="section-title mb-md">Status do sistema</h3><div class="safe-status-panel"><div class="safe-status-row"><span>Google Drive conectado</span><b>{{ healthLabel(['drive','googleDrive','connected']) }}</b></div><div class="safe-status-row"><span>Supabase configurado</span><b>sem expor chaves</b></div><div class="safe-status-row"><span>API relativa</span><b>/api</b></div><div class="safe-status-row"><span>Access token exibido</span><b>não</b></div><div class="safe-status-row"><span>Refresh token exibido</span><b>não</b></div></div></section><section class="settings-card"><h3 class="section-title mb-md">Conta</h3><p class="text-body-md text-on-surface-variant mb-md">Use este botão para limpar a sessão local e voltar ao login.</p><button class="btn-danger" (click)="auth.logout()"><span class="material-symbols-outlined text-[18px]">logout</span>Sair da conta</button></section></div></section>`})
+export class SettingsPageComponent implements OnInit{loading=signal(true);error=signal<string|null>(null);health=signal<unknown>({});constructor(private api:ApiService,public auth:AuthService){}ngOnInit():void{this.api.get<unknown>('/drive/health').subscribe({next:(res)=>{this.health.set(res);this.loading.set(false)},error:(err:Error)=>{this.error.set(err.message);this.loading.set(false)}})}healthLabel(keys:string[]):string{const v=pickString(this.health(),keys,'');return v?String(v):'verificar endpoint /api/drive/health'}}

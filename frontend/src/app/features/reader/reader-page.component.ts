@@ -1,51 +1,12 @@
-import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute } from '@angular/router';
+import { Component, OnInit, signal } from '@angular/core';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService } from '../../core/api.service';
-import { LoadingComponent } from '../../shared/components/loading/loading.component';
+import { StudyMaterial } from '../../core/models/app.models';
 import { ErrorMessageComponent } from '../../shared/components/error-message/error-message.component';
-
-@Component({
-  selector: 'app-reader-page',
-  standalone: true,
-  imports: [CommonModule, LoadingComponent, ErrorMessageComponent],
-  template: `
-    <section class="p-lg md:p-2xl max-w-4xl mx-auto w-full">
-      <app-loading *ngIf="loading()"></app-loading>
-      <app-error-message *ngIf="error()" [message]="error()!"></app-error-message>
-
-      <div *ngIf="!loading() && !error() && data() as d">
-        <h2 class="text-headline-md mb-md">{{ d.title || d.final_name }}</h2>
-        <div class="aspect-[4/5] bg-white rounded-xl shadow-sm border border-outline-variant overflow-hidden relative">
-          <iframe *ngIf="d.previewUrl" [src]="d.previewUrl" class="w-full h-full" frameborder="0"></iframe>
-        </div>
-      </div>
-    </section>
-  `
-})
-export class ReaderPageComponent implements OnInit {
-  loading = signal(true);
-  error = signal<string | null>(null);
-  data = signal<any | null>(null);
-
-  constructor(private route: ActivatedRoute, private api: ApiService) {}
-
-  ngOnInit(): void {
-    const id = this.route.snapshot.paramMap.get('materialId');
-    if (!id) {
-      this.error.set('Material não encontrado.');
-      this.loading.set(false);
-      return;
-    }
-    this.api.get<any>(`/reader/materials/${id}`).subscribe({
-      next: (res) => {
-        this.data.set(res);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.error.set('Não foi possível carregar o leitor.');
-        this.loading.set(false);
-      }
-    });
-  }
-}
+import { LoadingComponent } from '../../shared/components/loading/loading.component';
+import { fileTitle, pickString } from '../../shared/utils/view.utils';
+@Component({selector:'app-reader-page',standalone:true,imports:[CommonModule,RouterLink,LoadingComponent,ErrorMessageComponent],template:`
+<section class="page-shell"><a routerLink="/app/library" class="text-primary text-label-md hover:underline no-underline">&larr; Voltar para biblioteca</a><app-loading *ngIf="loading()"></app-loading><app-error-message *ngIf="error()" [message]="error()!"></app-error-message><div *ngIf="!loading()&&material()" class="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-lg mt-lg"><section class="settings-card"><h2 class="text-headline-md text-on-surface mb-md">{{ title() }}</h2><div class="preview-frame min-h-[70vh]" *ngIf="preview(); else noPreview"><iframe [src]="safe()" title="Leitor" loading="lazy"></iframe></div><ng-template #noPreview><div class="empty-state"><span class="material-symbols-outlined">chrome_reader_mode</span><h3>Leitor sem prévia</h3><p>Não há URL de preview/embed para este material.</p></div></ng-template></section><aside class="settings-card h-fit space-y-md"><h3 class="section-title">Progresso</h3><div class="safe-status-panel"><div class="safe-status-row"><span>Status</span><b>{{ pick(['progress_status','status'],'não iniciado') }}</b></div><div class="safe-status-row"><span>Tipo</span><b>{{ pick(['file_type','type'],'material') }}</b></div></div><button class="btn-primary w-full justify-center">Marcar como concluído</button><button class="btn-secondary w-full justify-center">Salvar nota</button></aside></div></section>`})
+export class ReaderPageComponent implements OnInit{loading=signal(true);error=signal<string|null>(null);material=signal<StudyMaterial|null>(null);constructor(private route:ActivatedRoute,private api:ApiService,private sanitizer:DomSanitizer){}ngOnInit():void{const id=this.route.snapshot.paramMap.get('materialId')||'';this.api.get<StudyMaterial>(`/reader/materials/${encodeURIComponent(id)}`).subscribe({next:(res)=>{this.material.set(res);this.loading.set(false)},error:()=>{this.api.get<StudyMaterial>(`/files/${encodeURIComponent(id)}`).subscribe({next:(res)=>{this.material.set(res);this.loading.set(false)},error:(err:Error)=>{this.error.set(err.message);this.loading.set(false)}})}})}title():string{return fileTitle(this.material())}pick(k:string[],f=''):string{return pickString(this.material(),k,f)}preview():string{return pickString(this.material(),['embed_url','google_drive_preview_url','preview_url','url'],'')}safe():SafeResourceUrl{return this.sanitizer.bypassSecurityTrustResourceUrl(this.preview())}}

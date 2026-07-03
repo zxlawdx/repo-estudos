@@ -15,16 +15,29 @@
             "outputPath": "dist/frontend",
             "index": "src/index.html",
             "browser": "src/main.ts",
-            "polyfills": ["zone.js"],
+            "polyfills": [
+              "zone.js"
+            ],
             "tsConfig": "tsconfig.app.json",
-            "assets": ["src/assets"],
-            "styles": ["src/styles.scss"],
-            "scripts": []
+            "assets": [
+              "src/assets"
+            ],
+            "styles": [
+              "src/styles.scss"
+            ],
+            "scripts": [],
+            "optimization": {
+              "fonts": false
+            }
           },
           "configurations": {
             "production": {
               "budgets": [
-                { "type": "initial", "maximumWarning": "1mb", "maximumError": "2mb" }
+                {
+                  "type": "initial",
+                  "maximumWarning": "1mb",
+                  "maximumError": "2mb"
+                }
               ],
               "outputHashing": "all"
             },
@@ -39,11 +52,17 @@
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
           "configurations": {
-            "production": { "buildTarget": "repositorio-estudos-frontend:build:production" },
-            "development": { "buildTarget": "repositorio-estudos-frontend:build:development" }
+            "production": {
+              "buildTarget": "repositorio-estudos-frontend:build:production"
+            },
+            "development": {
+              "buildTarget": "repositorio-estudos-frontend:build:development"
+            }
           },
           "defaultConfiguration": "development",
-          "options": { "port": 4200 }
+          "options": {
+            "port": 4200
+          }
         }
       }
     }

@@ -1,132 +1,79 @@
-import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ApiService } from '../../core/api.service';
-import { LoadingComponent } from '../../shared/components/loading/loading.component';
+import { Component, OnInit, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { GraphData, GraphEdge, GraphNode } from '../../core/models/app.models';
+import { GraphService } from '../../core/services/graph.service';
 import { ErrorMessageComponent } from '../../shared/components/error-message/error-message.component';
+import { LoadingComponent } from '../../shared/components/loading/loading.component';
+import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
+import { pickString } from '../../shared/utils/view.utils';
 
-interface GraphNode {
-  id: string;
-  label: string;
-  type: string;
-  x: number;
-  y: number;
-}
-interface GraphEdge {
-  id: string;
-  source: string;
-  target: string;
-}
+interface PositionedNode extends GraphNode { x: number; y: number; }
 
 @Component({
   selector: 'app-graph-page',
   standalone: true,
-  imports: [CommonModule, LoadingComponent, ErrorMessageComponent],
+  imports: [CommonModule, FormsModule, PageHeaderComponent, LoadingComponent, ErrorMessageComponent],
   template: `
-    <section class="p-lg md:p-2xl max-w-container-max mx-auto w-full">
-      <h2 class="text-headline-md text-on-surface mb-md">Grafo de Conhecimento</h2>
-
+    <section class="page-shell">
+      <app-page-header title="Grafo global" subtitle="Visualize materiais, trilhas, categorias, tags, tópicos e dependências."></app-page-header>
       <app-loading *ngIf="loading()"></app-loading>
       <app-error-message *ngIf="error()" [message]="error()!"></app-error-message>
 
-      <div *ngIf="!loading() && !error()" class="relative bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden" style="height: 560px;">
-        <svg class="absolute inset-0 w-full h-full" (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()">
-          <line *ngFor="let e of edges()" [attr.x1]="nodeById(e.source)?.x" [attr.y1]="nodeById(e.source)?.y"
-                [attr.x2]="nodeById(e.target)?.x" [attr.y2]="nodeById(e.target)?.y"
-                stroke="#737686" stroke-width="1.5" />
-          <g *ngFor="let n of nodes()" [attr.transform]="'translate(' + n.x + ',' + n.y + ')'"
-             (mousedown)="onMouseDown($event, n)" style="cursor: grab;">
-            <rect x="-70" y="-24" width="140" height="48" rx="10" fill="white" stroke="#c3c6d7"></rect>
-            <text x="0" y="5" text-anchor="middle" font-size="12" fill="#191c1e">{{ n.label }}</text>
-          </g>
-        </svg>
-      </div>
-      <div class="mt-md flex justify-end" *ngIf="!loading() && !error()">
-        <button (click)="savePositions()" class="bg-primary text-on-primary px-lg py-2 rounded-xl text-label-md hover:opacity-90">
-          Salvar posições
-        </button>
+      <div *ngIf="!loading()" class="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-lg">
+        <section class="settings-card overflow-hidden">
+          <div class="flex items-center justify-between gap-3 flex-wrap mb-md">
+            <div class="chips-row"><button class="filter-chip active">Todos</button><button class="filter-chip">Materiais</button><button class="filter-chip">Trilhas</button><button class="filter-chip">Categorias</button></div>
+            <div class="flex gap-2"><button class="btn-secondary" (click)="resetView()"><span class="material-symbols-outlined text-[18px]">center_focus_strong</span>Reset</button><button class="btn-primary" (click)="savePositions()"><span class="material-symbols-outlined text-[18px]">save</span>Salvar posições</button></div>
+          </div>
+
+          <div class="graph-canvas" (wheel)="zoom($event)">
+            <svg [attr.viewBox]="viewBox()" class="w-full h-full select-none" (mousemove)="move($event)" (mouseup)="stopDrag()" (mouseleave)="stopDrag()">
+              <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#94a3b8"></path></marker></defs>
+              <line *ngFor="let edge of edges()" [attr.x1]="nodeX(edgeSource(edge))" [attr.y1]="nodeY(edgeSource(edge))" [attr.x2]="nodeX(edgeTarget(edge))" [attr.y2]="nodeY(edgeTarget(edge))" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"></line>
+              <g *ngFor="let node of nodes()" [attr.transform]="'translate(' + node.x + ',' + node.y + ')'" (mousedown)="startDrag($event, node)" (click)="selectNode(node)">
+                <circle r="34" class="graph-node-circle"></circle>
+                <text text-anchor="middle" y="5" class="graph-node-icon">{{ icon(node) }}</text>
+                <text text-anchor="middle" y="52" class="graph-node-label">{{ label(node) }}</text>
+              </g>
+            </svg>
+            <div *ngIf="!nodes().length" class="graph-empty"><span class="material-symbols-outlined">hub</span><p>Nenhum nó retornado pelo endpoint /api/graph.</p></div>
+          </div>
+        </section>
+
+        <aside class="settings-card h-fit">
+          <h3 class="section-title mb-md">Detalhes do nó</h3>
+          <div *ngIf="!selected()" class="text-body-sm text-on-surface-variant">Clique em um nó para ver detalhes.</div>
+          <div *ngIf="selected()" class="safe-status-panel">
+            <div class="safe-status-row"><span>Título</span><b>{{ label(selected()) }}</b></div>
+            <div class="safe-status-row"><span>Tipo</span><b>{{ selected()?.type || 'nó' }}</b></div>
+            <div class="safe-status-row"><span>ID</span><b class="break-all">{{ selected()?.id }}</b></div>
+          </div>
+          <p *ngIf="saved()" class="mt-md text-body-sm text-primary bg-primary-fixed rounded-2xl px-4 py-3">Posições salvas.</p>
+        </aside>
       </div>
     </section>
   `
 })
 export class GraphPageComponent implements OnInit {
-  loading = signal(true);
-  error = signal<string | null>(null);
-  nodes = signal<GraphNode[]>([]);
-  edges = signal<GraphEdge[]>([]);
-
-  private dragging: GraphNode | null = null;
-
-  constructor(private api: ApiService) {}
-
-  ngOnInit(): void {
-    this.api.get<any>('/graph').subscribe({
-      next: (graphRes) => {
-        const rawNodes = (graphRes?.nodes || []) as any[];
-        const rawEdges = (graphRes?.edges || []) as any[];
-        this.edges.set(rawEdges.map((e) => ({ id: e.id, source: e.source || e.fromId, target: e.target || e.toId })));
-
-        this.api.get<any>('/graph/positions').subscribe({
-          next: (posRes) => {
-            const positions: Record<string, { x: number; y: number }> = {};
-            (posRes?.positions || posRes || []).forEach((p: any) => {
-              positions[p.nodeKey || p.node_key || p.id] = { x: p.x, y: p.y };
-            });
-            this.nodes.set(
-              rawNodes.map((n, i) => {
-                const key = n.key || n.id;
-                const pos = positions[key];
-                return {
-                  id: key,
-                  label: n.label || n.name || key,
-                  type: n.type,
-                  x: pos?.x ?? 120 + (i % 4) * 180,
-                  y: pos?.y ?? 100 + Math.floor(i / 4) * 120
-                };
-              })
-            );
-            this.loading.set(false);
-          },
-          error: () => {
-            this.nodes.set(rawNodes.map((n, i) => ({ id: n.key || n.id, label: n.label || n.name, type: n.type, x: 120 + (i % 4) * 180, y: 100 + Math.floor(i / 4) * 120 })));
-            this.loading.set(false);
-          }
-        });
-      },
-      error: () => {
-        this.error.set('Não foi possível carregar o grafo.');
-        this.loading.set(false);
-      }
-    });
-  }
-
-  nodeById(id: string) {
-    return this.nodes().find((n) => n.id === id);
-  }
-
-  onMouseDown(event: MouseEvent, node: GraphNode) {
-    event.preventDefault();
-    this.dragging = node;
-  }
-
-  onMouseMove(event: MouseEvent) {
-    if (!this.dragging) return;
-    const svg = event.currentTarget as SVGSVGElement;
-    const rect = svg.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    this.nodes.update((list) =>
-      list.map((n) => (n.id === this.dragging!.id ? { ...n, x, y } : n))
-    );
-  }
-
-  onMouseUp() {
-    this.dragging = null;
-  }
-
-  savePositions() {
-    const payload = {
-      positions: this.nodes().map((n) => ({ nodeKey: n.id, x: n.x, y: n.y }))
-    };
-    this.api.post('/graph/positions', payload).subscribe();
-  }
+  loading = signal(true); error = signal<string | null>(null); nodes = signal<PositionedNode[]>([]); edges = signal<GraphEdge[]>([]); selected = signal<PositionedNode | null>(null); saved = signal(false);
+  private dragging: PositionedNode | null = null; private offset = { x: 0, y: 0 }; scale = signal(1); panX = signal(0); panY = signal(0);
+  constructor(private graph: GraphService) {}
+  ngOnInit(): void { this.load(); }
+  load(): void { this.graph.global().subscribe({ next: (res: GraphData) => { const nodes = Array.isArray(res.nodes) ? res.nodes : []; this.nodes.set(nodes.map((n, i) => ({ ...n, x: typeof n.x === 'number' ? n.x : 120 + (i % 5) * 160, y: typeof n.y === 'number' ? n.y : 120 + Math.floor(i / 5) * 150 }))); this.edges.set(Array.isArray(res.edges) ? res.edges : []); this.loading.set(false); this.loadPositions(); }, error: (err: Error) => { this.error.set(err.message); this.loading.set(false); } }); }
+  loadPositions(): void { this.graph.positions('global').subscribe({ next: (res) => { const map = (res && typeof res === 'object' ? res as Record<string, unknown> : {}) as Record<string, unknown>; this.nodes.update((nodes) => nodes.map((node) => { const p = map[node.id] as { x?: number; y?: number } | undefined; return p ? { ...node, x: Number(p.x ?? node.x), y: Number(p.y ?? node.y) } : node; })); }, error: () => undefined }); }
+  viewBox(): string { return `${this.panX()} ${this.panY()} ${900 / this.scale()} ${620 / this.scale()}`; }
+  resetView(): void { this.scale.set(1); this.panX.set(0); this.panY.set(0); }
+  zoom(event: WheelEvent): void { event.preventDefault(); this.scale.set(Math.max(0.55, Math.min(1.8, this.scale() + (event.deltaY > 0 ? -0.08 : 0.08)))); }
+  startDrag(event: MouseEvent, node: PositionedNode): void { event.preventDefault(); this.dragging = node; this.offset = { x: event.offsetX - node.x, y: event.offsetY - node.y }; }
+  move(event: MouseEvent): void { if (!this.dragging) return; const x = event.offsetX - this.offset.x; const y = event.offsetY - this.offset.y; const id = this.dragging.id; this.nodes.update((nodes) => nodes.map((n) => n.id === id ? { ...n, x, y } : n)); }
+  stopDrag(): void { this.dragging = null; }
+  selectNode(node: PositionedNode): void { this.selected.set(node); }
+  savePositions(): void { const positions: Record<string, { x: number; y: number }> = {}; this.nodes().forEach((n) => { positions[n.id] = { x: n.x, y: n.y }; }); this.graph.savePositions({ scope: 'global', positions }).subscribe({ next: () => this.saved.set(true), error: (err: Error) => this.error.set(err.message) }); }
+  nodeX(id: string): number { return this.nodes().find((n) => n.id === id)?.x || 0; }
+  nodeY(id: string): number { return this.nodes().find((n) => n.id === id)?.y || 0; }
+  edgeSource(edge: GraphEdge): string { return String(edge.source || edge.from || ''); }
+  edgeTarget(edge: GraphEdge): string { return String(edge.target || edge.to || ''); }
+  label(node: GraphNode | null): string { return pickString(node, ['label', 'title', 'name'], node?.id || 'Nó'); }
+  icon(node: GraphNode): string { const t = String(node.type || '').toLowerCase(); if (t.includes('path')) return '⟲'; if (t.includes('category')) return '◎'; if (t.includes('tag')) return '#'; return '📄'; }
 }

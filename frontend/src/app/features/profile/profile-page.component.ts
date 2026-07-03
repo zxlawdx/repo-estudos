@@ -1,102 +1,15 @@
-import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ApiService } from '../../core/api.service';
-import { LoadingComponent } from '../../shared/components/loading/loading.component';
+import { AuthService } from '../../core/auth.service';
+import { UserProfile } from '../../core/models/app.models';
+import { ProfileService } from '../../core/services/profile.service';
 import { ErrorMessageComponent } from '../../shared/components/error-message/error-message.component';
-
-@Component({
-  selector: 'app-profile-page',
-  standalone: true,
-  imports: [CommonModule, FormsModule, LoadingComponent, ErrorMessageComponent],
-  template: `
-    <section class="p-lg md:p-2xl max-w-2xl mx-auto w-full">
-      <h2 class="text-headline-md text-on-surface mb-xl">Meu Perfil</h2>
-
-      <app-loading *ngIf="loading()"></app-loading>
-      <app-error-message *ngIf="error()" [message]="error()!"></app-error-message>
-
-      <div *ngIf="!loading() && !error()" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg space-y-md">
-        <div class="flex flex-col gap-xs">
-          <label class="text-label-sm text-on-surface-variant">Nome de exibição</label>
-          <input class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-2" [(ngModel)]="displayName" name="displayName" />
-        </div>
-        <div class="flex flex-col gap-xs">
-          <label class="text-label-sm text-on-surface-variant">Foto de perfil</label>
-          <input type="file" (change)="onPhotoSelected($event)" accept="image/*" />
-        </div>
-
-        <p *ngIf="success()" class="text-body-sm text-primary">{{ success() }}</p>
-
-        <button (click)="save()" [disabled]="saving()" class="bg-primary text-on-primary px-lg py-2 rounded-xl text-label-md hover:opacity-90 disabled:opacity-60">
-          {{ saving() ? 'Salvando...' : 'Salvar alterações' }}
-        </button>
-      </div>
-
-      <div *ngIf="!loading() && stats()" class="mt-xl bg-surface-container-lowest border border-outline-variant rounded-xl p-lg">
-        <h3 class="text-headline-sm mb-md">Minhas estatísticas</h3>
-        <pre class="text-body-sm text-on-surface-variant whitespace-pre-wrap">{{ stats() | json }}</pre>
-      </div>
-    </section>
-  `
-})
-export class ProfilePageComponent implements OnInit {
-  loading = signal(true);
-  saving = signal(false);
-  error = signal<string | null>(null);
-  success = signal<string | null>(null);
-  displayName = '';
-  stats = signal<any | null>(null);
-  private photoFile: File | null = null;
-
-  constructor(private api: ApiService) {}
-
-  ngOnInit(): void {
-    this.api.get<any>('/profile/me').subscribe({
-      next: (res) => {
-        this.displayName = res?.display_name || '';
-        this.loading.set(false);
-      },
-      error: () => {
-        this.error.set('Não foi possível carregar o perfil.');
-        this.loading.set(false);
-      }
-    });
-    this.api.get<any>('/profile/stats').subscribe({ next: (res) => this.stats.set(res) });
-  }
-
-  onPhotoSelected(event: Event) {
-    const input = event.target as HTMLInputElement;
-    this.photoFile = input.files?.[0] || null;
-  }
-
-  save() {
-    this.saving.set(true);
-    this.success.set(null);
-    this.api.put<any>('/profile/me', { display_name: this.displayName }).subscribe({
-      next: () => {
-        if (this.photoFile) {
-          const formData = new FormData();
-          formData.append('file', this.photoFile);
-          this.api.postForm('/profile/photo', formData).subscribe({
-            next: () => {
-              this.saving.set(false);
-              this.success.set('Perfil atualizado com sucesso.');
-            },
-            error: () => {
-              this.saving.set(false);
-              this.success.set('Perfil atualizado, mas a foto falhou.');
-            }
-          });
-        } else {
-          this.saving.set(false);
-          this.success.set('Perfil atualizado com sucesso.');
-        }
-      },
-      error: () => {
-        this.saving.set(false);
-        this.error.set('Não foi possível salvar o perfil.');
-      }
-    });
-  }
-}
+import { LoadingComponent } from '../../shared/components/loading/loading.component';
+import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
+import { firstArray, pickNumber, pickString } from '../../shared/utils/view.utils';
+@Component({selector:'app-profile-page',standalone:true,imports:[CommonModule,FormsModule,PageHeaderComponent,LoadingComponent,ErrorMessageComponent],template:`
+<section class="page-shell"><app-page-header title="Meu perfil" subtitle="Dados da conta, estatísticas, materiais, trilhas e histórico recente."></app-page-header><app-loading *ngIf="loading()"></app-loading><app-error-message *ngIf="error()" [message]="error()!"></app-error-message>
+<div *ngIf="!loading()" class="space-y-lg"><section class="settings-card"><div class="flex flex-col md:flex-row gap-lg md:items-center"><div class="w-24 h-24 rounded-3xl bg-secondary-container text-primary grid place-items-center overflow-hidden text-3xl font-bold"><img *ngIf="avatar()" [src]="avatar()" class="w-full h-full object-cover" alt="Avatar"><span *ngIf="!avatar()">{{ initials() }}</span></div><div class="flex-1 min-w-0"><h2 class="text-headline-md text-on-surface truncate">{{ name() }}</h2><p class="text-body-md text-on-surface-variant">{{ email() }}</p><span class="badge badge-secondary mt-2">{{ role() }}</span></div><button class="btn-danger" (click)="auth.logout()"><span class="material-symbols-outlined text-[18px]">logout</span>Sair</button></div></section>
+<div class="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-lg"><section class="space-y-lg"><section class="settings-card"><h3 class="section-title mb-md">Resumo</h3><div class="grid grid-cols-2 md:grid-cols-3 gap-md"><div class="stat-card compact"><p class="stat-label">Materiais enviados</p><strong class="stat-value">{{ stat(['totalFiles','filesTotal','files_count']) }}</strong></div><div class="stat-card compact"><p class="stat-label">Concluídos</p><strong class="stat-value">{{ stat(['completed','done','completed_count']) }}</strong></div><div class="stat-card compact"><p class="stat-label">Ações recentes</p><strong class="stat-value">{{ stat(['actions','activity_count']) }}</strong></div></div></section><section class="settings-card"><h3 class="section-title mb-md">Materiais do usuário</h3><div *ngIf="!materials().length" class="text-body-sm text-on-surface-variant">Nenhum material retornado.</div><div class="grid grid-cols-1 md:grid-cols-2 gap-md"><div *ngFor="let m of materials()" class="rounded-2xl border border-outline-variant p-3"><strong class="block truncate">{{ pick(m,['title','final_name','original_name'],'Material sem título') }}</strong><span class="text-label-sm text-on-surface-variant">{{ pick(m,['status'],'Sem status') }}</span></div></div></section><section class="settings-card"><h3 class="section-title mb-md">Trilhas/progresso</h3><div *ngIf="!paths().length" class="text-body-sm text-on-surface-variant">Nenhuma trilha retornada.</div><div *ngFor="let p of paths()" class="activity-row"><span class="material-symbols-outlined text-primary">route</span><span><b>{{ pick(p,['title','name'],'Trilha sem título') }}</b><small>{{ pick(p,['progress'],'0') }}% de progresso</small></span></div></section></section><aside class="settings-card h-fit space-y-md"><h3 class="section-title">Editar perfil</h3><label class="filter-select"><span>Nome</span><input class="form-control" [(ngModel)]="displayName"></label><label class="filter-select"><span>Foto de perfil</span><input class="form-control" type="file" accept="image/*" (change)="selectPhoto($event)"></label><button class="btn-primary w-full justify-center" (click)="save()">Salvar nome</button><button class="btn-secondary w-full justify-center" (click)="uploadPhoto()" [disabled]="!photo()">Enviar foto</button><div class="safe-status-panel mt-md"><div class="safe-status-row"><span>Sessão ativa</span><b>sim</b></div><div class="safe-status-row"><span>Access token exibido</span><b>não</b></div><div class="safe-status-row"><span>Refresh token exibido</span><b>não</b></div></div></aside></div></div></section>`})
+export class ProfilePageComponent implements OnInit{loading=signal(true);error=signal<string|null>(null);profile=signal<UserProfile|null>(null);stats=signal<unknown>({});materials=signal<Record<string,unknown>[]>([]);paths=signal<Record<string,unknown>[]>([]);photo=signal<File|null>(null);displayName='';constructor(private service:ProfileService,public auth:AuthService){}ngOnInit():void{this.service.me().subscribe({next:(p)=>{this.profile.set(p);this.displayName=pickString(p,['display_name','displayName','name'],'');this.loading.set(false);this.loadStats()},error:(err:Error)=>{this.error.set(err.message);this.loading.set(false);this.loadStats()}})}loadStats():void{this.service.stats().subscribe({next:(res)=>{this.stats.set(res);this.materials.set(firstArray<Record<string,unknown>>(res,['materials','files','recentFiles']));this.paths.set(firstArray<Record<string,unknown>>(res,['paths','learningPaths']));},error:()=>undefined})}name():string{return pickString(this.profile()||this.auth.profile(),['display_name','displayName','name','email'],'Usuário')}email():string{return pickString(this.profile()||this.auth.profile(),['email'],'E-mail não disponível')}role():string{return pickString(this.profile()||this.auth.profile(),['role'],'viewer')}avatar():string{return pickString(this.profile()||this.auth.profile(),['avatar_url','profilePhotoUrl'],'')}initials():string{return this.name().charAt(0).toUpperCase()||'U'}stat(keys:string[]):number{return pickNumber(this.stats(),keys,0)}pick(i:unknown,k:string[],f=''):string{return pickString(i,k,f)}selectPhoto(e:Event):void{const input=e.target as HTMLInputElement;const f=input.files?.[0];if(f)this.photo.set(f)}save():void{this.service.update({display_name:this.displayName}).subscribe({next:(p)=>{this.profile.set(p);this.auth.profile.set(p)},error:(err:Error)=>this.error.set(err.message)})}uploadPhoto():void{const f=this.photo();if(!f)return;const form=new FormData();form.append('file',f);this.service.uploadPhoto(form).subscribe({next:()=>this.loadStats(),error:(err:Error)=>this.error.set(err.message)})}}

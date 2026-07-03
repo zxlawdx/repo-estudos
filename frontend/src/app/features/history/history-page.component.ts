@@ -1,0 +1,15 @@
+import { CommonModule } from '@angular/common';
+import { Component, OnInit, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { HistoryService } from '../../core/services/history.service';
+import { EmptyStateComponent } from '../../shared/components/empty-state/empty-state.component';
+import { ErrorMessageComponent } from '../../shared/components/error-message/error-message.component';
+import { LoadingComponent } from '../../shared/components/loading/loading.component';
+import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
+import { firstArray, formatDate, pickString } from '../../shared/utils/view.utils';
+@Component({selector:'app-history-page',standalone:true,imports:[CommonModule,FormsModule,PageHeaderComponent,LoadingComponent,ErrorMessageComponent,EmptyStateComponent],template:`
+<section class="page-shell"><app-page-header title="Histórico" subtitle="Uploads, edições, aprovações, mudanças de metadados e relações do grafo."></app-page-header>
+<section class="settings-card mb-lg"><div class="grid grid-cols-1 md:grid-cols-3 gap-md"><label class="filter-select"><span>Ação</span><input class="form-control" [(ngModel)]="action" placeholder="upload, update..." (keyup.enter)="load()"></label><label class="filter-select"><span>Material</span><input class="form-control" [(ngModel)]="material" placeholder="ID ou título" (keyup.enter)="load()"></label><div class="flex items-end"><button class="btn-primary w-full justify-center" (click)="load()">Filtrar</button></div></div></section>
+<app-loading *ngIf="loading()"></app-loading><app-error-message *ngIf="error()" [message]="error()!"></app-error-message><app-empty-state *ngIf="!loading()&&!error()&&!items().length" icon="history" title="Histórico vazio" description="Nenhuma ação foi retornada pelo endpoint."></app-empty-state>
+<div class="settings-card" *ngIf="!loading()&&items().length"><div *ngFor="let item of items()" class="activity-row border-b border-outline-variant last:border-0"><span class="material-symbols-outlined text-primary">history</span><span><b>{{ pick(item,['action'],'Ação') }}</b><small>{{ pick(item,['file_title','material_title','title'],'Material não informado') }} • {{ date(item) }}</small></span></div></div></section>`})
+export class HistoryPageComponent implements OnInit{loading=signal(true);error=signal<string|null>(null);items=signal<Record<string,unknown>[]>([]);action='';material='';constructor(private service:HistoryService){}ngOnInit():void{this.load()}load():void{this.loading.set(true);this.error.set(null);this.service.list({action:this.action,material:this.material,limit:80}).subscribe({next:(res)=>{this.items.set(firstArray<Record<string,unknown>>(res,['history','items','rows','activities']));this.loading.set(false)},error:(err:Error)=>{this.error.set(err.message);this.loading.set(false)}})}pick(i:unknown,k:string[],f=''):string{return pickString(i,k,f)}date(i:unknown):string{return formatDate(pickString(i,['created_at','createdAt','date'],''))}}
